@@ -77,7 +77,7 @@ def ContinuumEst(flux,ran=[1300,1500]):
     '''
 
     continuum=np.mean(flux[ran[0]:ran[1],:,:],axis=0)
-    continuum_std=np.std(flux[ran[0]:,ran[1],:,:],axis=0)
+    continuum_std=np.std(flux[ran[0]:ran[1],:,:],axis=0)
 
     return continuum,continuum_std
 
@@ -96,7 +96,7 @@ def ContinuumSub(flux,continuum,continuum_std):
     return flux,flux_std
 
 
-def FindSource(map,sigma=3.):
+def FindSource(map,FWHM=3.,sigma=3.):
     '''
     this function is used to find the point-like source
     :param map: image's 2-dimensional array
@@ -112,7 +112,7 @@ def FindSource(map,sigma=3.):
     boundary=photon_mean+sigma*photon_std
 
     #use the module already exist
-    daofind=sourcefinder(fwhm=3.,threshold=sigma*photon_std)
+    daofind=sourcefinder(fwhm=FWHM,threshold=sigma*photon_std)
     source=daofind(map-photon_mean)
 
     y,x=[int(i) for i in np.round(source['xcentroid'].data)],[int(i) for i in np.round(source['ycentroid'].data)]
@@ -340,10 +340,11 @@ flux=FLux(cube_data,cube_wavelength,gain)
 continuum,continuum_std=ContinuumEst(flux)
 flux_sub,flux_std=ContinuumSub(flux,continuum,continuum_std)
 flux_map=PlotMap(cubedata=flux_sub,cube_wavelength=cube_wavelength,waveprint=False,emissionline='CV')
-coordinate_map,boundary=FindSource(flux_map,5.)
+# coordinate_map,boundary=FindSource(flux_map,FWHM=3.,sigma=5.)
 # Spectral(flux_sub,cube_wavelength,coordinate_map,image=flux_map,emissionline=False)
 # LocateTarget(cube,[220.3520458,40.05268333])
-# interpolated_map=MapInterpolation(flux_map)
-# kernel=GussianKernel([3.,3.])
-# smoothed_map=GussianFilter(interpolated_map,kernel)
-# Colormap(smoothed_map,boundary)
+interpolated_map=MapInterpolation(flux_map)
+kernel=GussianKernel([3.,3.])
+smoothed_map=GussianFilter(interpolated_map,kernel)
+coordinate_map,boundary=FindSource(smoothed_map,FWHM=4.6,sigma=1.2)#4.6 and 1.2 are the best value to select the three source
+Colormap(smoothed_map,boundary)
