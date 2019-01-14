@@ -46,8 +46,6 @@ def PlotMap(cubedata,cube_wavelength,waveprint=True,emissionline=None):
         print(wavelengthrange)
 
 
-    # plt.imshow(map)
-    # plt.show()
     return map
 
 
@@ -79,10 +77,11 @@ def ContinuumEst(flux,ran=[1300,1500]):
     '''
 
     continuum=np.mean(flux[ran[0]:ran[1],:,:],axis=0)
+    continuum_std=np.std(flux[ran[0]:,ran[1],:,:],axis=0)
 
-    return continuum
+    return continuum,continuum_std
 
-def ContinuumSub(flux,continuum):
+def ContinuumSub(flux,continuum,continuum_std):
     '''
     subtract continuum component
     :param flux: total flux
@@ -93,7 +92,8 @@ def ContinuumSub(flux,continuum):
     flux_sub=np.zeros(np.shape(flux))
     for i in range(np.shape(flux)[0]):
         flux_sub[i,:,:]=flux[i,:,:]-continuum
-    return flux
+    flux_std=continuum_std
+    return flux,flux_std
 
 
 def FindSource(map,sigma=3.):
@@ -337,8 +337,8 @@ def Colormap(map,boundary):
 gain=0.145
 cube_data,cube_wavelength,cube=ReadCube(path,cube_name)
 flux=FLux(cube_data,cube_wavelength,gain)
-continuum=ContinuumEst(flux)
-flux_sub=ContinuumSub(flux,continuum)
+continuum,continuum_std=ContinuumEst(flux)
+flux_sub,flux_std=ContinuumSub(flux,continuum,continuum_std)
 flux_map=PlotMap(cubedata=flux_sub,cube_wavelength=cube_wavelength,waveprint=False,emissionline='CV')
 coordinate_map,boundary=FindSource(flux_map,5.)
 # Spectral(flux_sub,cube_wavelength,coordinate_map,image=flux_map,emissionline=False)
