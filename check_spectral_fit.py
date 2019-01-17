@@ -25,47 +25,57 @@ def ReadCube(path,cube_name):
     return cube._data,cube.spectral_axis,cube
 
 
-def PlotMap(cubedata,cube_wavelength,waveprint=True,emissionline=None):
+def CubeCut(cube=None,cube_wavelength=None,emissionline=None,rang=None):
+    '''
+    cut the cube and return the part we need
+    :param cube: cube data
+    :param cube_wavelength: wavelength
+    :param emissionline: select different part according to this parameter
+    :param rang: if set emission line to manual,then this parameter must be given
+    :return: part of the initial cube and corresponding wavelength
+    '''
+    if emissionline=='lyman':
+        return cube[950:1010,2:67,:],cube_wavelength[950:1010]
+    elif emissionline=='CV':
+        return cube[1150:1330,2:67,:],cube_wavelength[1150:1330]
+        # return cube[:1400, 2:67, :], cube_wavelength[:1400]
+    elif emissionline=='manual':
+        return cube[rang[0,0]:,rang[1,0]:rang[1,1],rang[2,0]:rang[2,1]]
+    else:
+        return cube[:,2:67,:],cube_wavelength
+
+
+def PlotMap(cubedata):
     '''
     plot the 2D image of the cube by summing along the wavelength axis to get the total flux for each pixel
     :param cubedata: 3D cube data
     :return: 2D image array
     '''
 
-    if emissionline=='lyman':
-        map=np.sum(cubedata[950:1010,2:67,:],axis=0)
-        wavelengthrange=cube_wavelength[950:1010]
-    elif emissionline=='CV':
-        map=np.sum(cubedata[1050:1330,2:67,:],axis=0)
-        wavelengthrange=cube_wavelength[1050:1330]
-    else:
-        map = np.sum(cubedata[:, 2:67, :], axis=0)
-        wavelengthrange=cube_wavelength
-
-    if waveprint:
-        print(wavelengthrange)
-
+    map=np.sum(cubedata,axis=0)
 
     return map
 
 
-def FLux(cubedata,wavelength_axis,gain):
+def FLux(cube,wavelength_axis,gain,emissionline=None):
     """
             convert number of electrons per second of pixel to flux
-            :param cubedata: cube data
+            :param cube: cube data
+            :param emissionline: this parameter determine which part of the given cube we need
             :param wavelength_axis: wavelength used to calculate flux
             :param gain: ccd gain number of electrons / number of photons
-            :return: map of flux
+            :return: flux and corresponding wavelength
     """
 
-    photons=cubedata[:,2:67,:]/gain
-    wavelength_axis=np.array((wavelength_axis).to(u.meter).data)
+    cubedata,wavelength_cut=CubeCut(cube,wavelength_axis,emissionline)
+    photons=cubedata/gain
+    wavelength_axis=np.array((wavelength_cut).to(u.meter).data)
     for i in range(np.shape(wavelength_axis)[0]):
         photons[i]=photons[i]*const.h*(const.c.data/wavelength_axis[i])
 
     flux=photons
 
-    return flux
+    return flux,wavelength_cut
 
 
 def ContinuumEst(flux,ran=[1300,1500]):
@@ -81,19 +91,59 @@ def ContinuumEst(flux,ran=[1300,1500]):
 
     return continuum,continuum_std
 
-def ContinuumSub(flux,continuum,continuum_std):
+def ContinuumSub(flux,flux_all):
     '''
     subtract continuum component
     :param flux: total flux
-    :param continuum: comtinuum component
-    :return: continuum subtracted flux
+    :param flux_all: used to estimate continuum
+    :return: flux and its standard deviation
     '''
 
     flux_sub=np.zeros(np.shape(flux))
+    continuum,continuum_std=ContinuumEst(flux_all)
     for i in range(np.shape(flux)[0]):
         flux_sub[i,:,:]=flux[i,:,:]-continuum
     flux_std=continuum_std
     return flux,flux_std
+
+
+def BackgroundEstimation(image,region):
+    '''
+    estimate background value of the given image
+    :param image: wait to be analysis
+    :param region: which part we use to estimate background
+    :return: background and its standard deviation
+    '''
+
+    background=np.mean(image[region[0,0]:region[0,1],region[1,0]:region[1,1]])
+    std_background=np.std(image[region[0,0]:region[0,1],region[1,0]:region[1,1]])
+
+    return background,std_background
+
+def ImageBackgroundSubtraction(image,background):
+    '''
+    subtract background from the given image
+    :param image: wait to be subtracting
+    :param background: background value
+    :return: background-subrtacted image
+    '''
+
+    image=image-background
+    return image
+
+
+def CubeBackgroundSubtraction(cube):
+    '''
+    subtract background from the given cube
+    :param cube: cube waited to be subtract
+    :return: background-subtracted cube
+    '''
+    cube_bk=np.zeros(np.shape(cube))
+    for i in range(len(cube)):
+        background,background_std=BackgroundEstimation(cube[i],np.array([[11,20],[5,9]]))
+        cube_bk[i]=ImageBackgroundSubtraction(cube[i],background)
+
+    return cube_bk
 
 
 def FindSource(map,FWHM=3.,sigma=3.):
@@ -238,7 +288,7 @@ def AxiesInterpolation(map,axies=0):
 
     return final_map
 
-def MapInterpolation(map):
+def MapInterpolation(map,internum):
     '''
     interpolate value to the map
     :param map: original map
@@ -246,7 +296,7 @@ def MapInterpolation(map):
     '''
 
     #interploate original map along x axis and y axis
-    for i in range(3):
+    for i in range(internum):
         map=AxiesInterpolation(map)
         map=AxiesInterpolation(map,axies=1)
     map=map[::-1]
@@ -311,7 +361,48 @@ def GussianFilter(map,kernel):
     return new_map[:-2,:-2]
 
 
-def Colormap(map,boundary):
+def CubeInterpolation(cube,internum):
+    '''
+    interpolate the image of every wavelength in the cube
+    :param cube: cube waiting interpolation
+    :param internum: number of interpolation
+    :return: interpolated cube
+    '''
+    shape0 = np.shape(cube)
+    shape1 = np.shape(MapInterpolation(cube[0], internum))
+    cube_inter = np.zeros((shape0[0], shape1[0], shape1[1]))
+    for i in range(len(cube)):
+        cube_inter[i]=MapInterpolation(cube[i],internum)
+    return cube_inter
+
+def CubeSmooth(cube):
+    '''
+    smooth the image of every wavelength in this cube
+    :param cube: cube waiting smoothing
+    :return: smoothed cube
+    '''
+    kernel=GussianKernel([3.,3.])
+    shape0=np.shape(GussianFilter(cube[0],kernel))
+    shape1=np.shape(cube)
+    cube_sm=np.zeros((shape1[0],shape0[0],shape0[1]))
+    for i in range(len(cube)):
+        cube_sm[i]=GussianFilter(cube[i],kernel)
+
+    return cube
+
+
+def TwoDSpectral(cube):
+    '''
+    extract the 2D spectra from the cube
+    :param cube:
+    :return: 2D spectral array
+    '''
+    cube=CubeCut(cube,emissionline='manual',rang=np.array([[0,-1],[30,160],[53,70]]))
+    twod_spectral=np.sum(cube,axis=2)
+    return twod_spectral
+
+
+def Colormap(map,*arg):
     '''
     plot the map
     :param map: array of the map
@@ -325,26 +416,32 @@ def Colormap(map,boundary):
 
     #plot it
     fig=plt.figure(1)
-    plt.xlim(xmax=175.)
+    plt.xlim(xmax=float(np.shape(map)[1]))
     ax=plt.gca()
     ax.set_aspect(1)
     pcm=ax.pcolormesh(X,Y,map,norm=norm,cmap='RdBu_r')
-    plt.contour(X,Y,map,[boundary],alpha=.75,color='b')
     fig.colorbar(pcm, ax=ax, extend='both', orientation='vertical')
-    plt.axis('off')
+    plt.xlabel(r'$wavelength$')
+    plt.ylabel(r'$distance$')
+    # plt.axis('off')
     plt.show()
+    return None
 
 gain=0.145
 cube_data,cube_wavelength,cube=ReadCube(path,cube_name)
-flux=FLux(cube_data,cube_wavelength,gain)
-continuum,continuum_std=ContinuumEst(flux)
-flux_sub,flux_std=ContinuumSub(flux,continuum,continuum_std)
-flux_map=PlotMap(cubedata=flux_sub,cube_wavelength=cube_wavelength,waveprint=False,emissionline='CV')
+flux_all,wavelength_all=FLux(cube_data,cube_wavelength,gain)
+flux_CV,wavelength_CV=FLux(cube_data,cube_wavelength,gain,'CV')
+flux_CV_sub,continuum_std=ContinuumSub(flux_CV,flux_all)
+flux_CV_sub_inter=CubeInterpolation(flux_CV_sub,2)
+flux_CV_sub_inter_sm=CubeSmooth(flux_CV_sub_inter)
+flux_CV_sub_inter_sm_map=PlotMap(flux_CV_sub_inter_sm)
+twod_spectral=TwoDSpectral(flux_CV_sub_inter_sm)
+Colormap(twod_spectral.T,wavelength_CV)
+# plt.imshow(flux_CV_sub_inter_sm_map)
+# plt.show()
+# Colormap(flux_CV_sub_inter_sm_map)
+
+
+# coordinate_map,boundary=FindSource(smoothed_map,FWHM=4.6,sigma=1.2)#4.6 and 1.2 are the best value to select the three source
 # coordinate_map,boundary=FindSource(flux_map,FWHM=3.,sigma=5.)
 # Spectral(flux_sub,cube_wavelength,coordinate_map,image=flux_map,emissionline=False)
-# LocateTarget(cube,[220.3520458,40.05268333])
-interpolated_map=MapInterpolation(flux_map)
-kernel=GussianKernel([3.,3.])
-smoothed_map=GussianFilter(interpolated_map,kernel)
-coordinate_map,boundary=FindSource(smoothed_map,FWHM=4.6,sigma=1.2)#4.6 and 1.2 are the best value to select the three source
-Colormap(smoothed_map,boundary)
