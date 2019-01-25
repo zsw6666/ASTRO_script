@@ -10,6 +10,7 @@ import os
 
 path='/Users/shiwuzhang/ASTRO/MAMMOTH_KCWI'
 cube_name='1441+4003_comb_ss_icubes.fits'
+# cube_name='1441+4003_comb_psfs_icubes.fits'
 
 def ReadCube(path,cube_name):
     '''
@@ -22,10 +23,10 @@ def ReadCube(path,cube_name):
     os.chdir(path)
     cube = SpectralCube.read(cube_name)
     print(cube)
-    return cube._data,cube.spectral_axis,cube
+    return cube._data,cube.spectral_axis,cube.world[0,:,:][1].value,cube.world[0,:,:][2].value,cube
 
 
-def CubeCut(cube=None,cube_wavelength=None,emissionline=None,rang=None):
+def CubeCut(cube=None,cube_wavelength=None,ra=None,dec=None,emissionline=None,rang=None):
     '''
     cut the cube and return the part we need
     :param cube: cube data
@@ -35,14 +36,24 @@ def CubeCut(cube=None,cube_wavelength=None,emissionline=None,rang=None):
     :return: part of the initial cube and corresponding wavelength
     '''
     if emissionline=='lyman':
-        return cube[950:1010,2:67,:],cube_wavelength[950:1010]
+        cube_cut,wavelength_cut=cube[950:1010,2:67,:],cube_wavelength[950:1010]
     elif emissionline=='CV':
-        return cube[1150:1330,2:67,:],cube_wavelength[1150:1330]
-        # return cube[:1400, 2:67, :], cube_wavelength[:1400]
+        # print(cube_wavelength[1030:1200])
+        # cube_cut,wavelength_cut=cube[1030:1200,2:67,:],cube_wavelength[1030:1200]
+        cube_cut, wavelength_cut =cube[1030:1500, 2:67, :], cube_wavelength[1030:1500]
     elif emissionline=='manual':
-        return cube[rang[0,0]:,rang[1,0]:rang[1,1],rang[2,0]:rang[2,1]]
+        cube_cut, wavelength_cut =cube[rang[0,0]:,rang[1,0]:rang[1,1],rang[2,0]:rang[2,1]]
     else:
-        return cube[:,2:67,:],cube_wavelength
+        cube_cut, wavelength_cut =cube[:,2:67,:],cube_wavelength
+    if ra is not None and dec is not None:
+        ra_cut = ra[2:67, :]
+        dec_cut = dec[2:67, :]
+
+    else:
+        ra_cut=None
+        dec_cut=None
+    return cube_cut,wavelength_cut,ra_cut,dec_cut
+
 
 
 def PlotMap(cubedata):
@@ -57,7 +68,7 @@ def PlotMap(cubedata):
     return map
 
 
-def FLux(cube,wavelength_axis,gain,emissionline=None):
+def FLux(cube=None,wavelength_axis=None,ra=None,dec=None,gain=None,emissionline=None):
     """
             convert number of electrons per second of pixel to flux
             :param cube: cube data
@@ -66,8 +77,8 @@ def FLux(cube,wavelength_axis,gain,emissionline=None):
             :param gain: ccd gain number of electrons / number of photons
             :return: flux and corresponding wavelength
     """
-
-    cubedata,wavelength_cut=CubeCut(cube,wavelength_axis,emissionline)
+    cube_all=CubeCut(cube=cube,cube_wavelength=wavelength_axis,ra=ra,dec=dec,emissionline=emissionline)
+    cubedata,wavelength_cut=cube_all[0],cube_all[1]
     photons=cubedata/gain
     wavelength_axis=np.array((wavelength_cut).to(u.meter).data)
     for i in range(np.shape(wavelength_axis)[0]):
@@ -75,7 +86,7 @@ def FLux(cube,wavelength_axis,gain,emissionline=None):
 
     flux=photons
 
-    return flux,wavelength_cut
+    return flux,wavelength_cut,cube_all[2],cube_all[3]
 
 
 def ContinuumEst(flux,ran=[1300,1500]):
@@ -353,15 +364,15 @@ def GussianFilter(map,kernel):
     #calculate the value for each pixel
     for x in range(2,map_shape[0]):
         for y in range(2,map_shape[1]):
-            i_map=kernel_map[x-2:x+3,y-2:y+3]
-            pixel_value=kernel*kernel_map[x-2:x+3,y-2:y+3]
-            s=np.sum(kernel*kernel_map[x-2:x+3,y-2:y+3])
+            # i_map=kernel_map[x-2:x+3,y-2:y+3]
+            # pixel_value=kernel*kernel_map[x-2:x+3,y-2:y+3]
+            # s=np.sum(kernel*kernel_map[x-2:x+3,y-2:y+3])
             new_map[x-2,y-2]=np.sum(kernel*kernel_map[x-2:x+3,y-2:y+3])
 
     return new_map[:-2,:-2]
 
 
-def CubeInterpolation(cube,internum):
+def CubeInterpolation(cube,ra,dec,internum):
     '''
     interpolate the image of every wavelength in the cube
     :param cube: cube waiting interpolation
@@ -373,7 +384,9 @@ def CubeInterpolation(cube,internum):
     cube_inter = np.zeros((shape0[0], shape1[0], shape1[1]))
     for i in range(len(cube)):
         cube_inter[i]=MapInterpolation(cube[i],internum)
-    return cube_inter
+    ra_inter=MapInterpolation(ra,internum)
+    dec_inter=MapInterpolation(dec,internum)
+    return cube_inter,ra_inter,dec_inter
 
 def CubeSmooth(cube):
     '''
@@ -391,18 +404,18 @@ def CubeSmooth(cube):
     return cube
 
 
-def TwoDSpectral(cube):
+def TwoDSpectral(cube,rang=None):
     '''
     extract the 2D spectra from the cube
     :param cube:
     :return: 2D spectral array
     '''
-    cube=CubeCut(cube,emissionline='manual',rang=np.array([[0,-1],[30,160],[53,70]]))
+    cube=CubeCut(cube,emissionline='manual',rang=rang)
     twod_spectral=np.sum(cube,axis=2)
     return twod_spectral
 
 
-def Colormap(map,*arg):
+def Colormap(map,**krg):
     '''
     plot the map
     :param map: array of the map
@@ -410,36 +423,51 @@ def Colormap(map,*arg):
     '''
 
     #set the axis and color
-    Y,X=np.mgrid[0:np.shape(map)[0],0:np.shape(map)[1]]
+    ra=np.linspace(krg['ra'][1],krg['ra'][0],np.shape(map)[0])
+    dec=np.linspace(krg['dec'][0],krg['dec'][1],np.shape(map)[1])
+    X,Y=np.meshgrid(dec,ra)
+    Y=Y[::-1,:]
     bounds=np.linspace(np.min(map),np.max(map),10)
     norm = clr.BoundaryNorm(boundaries=bounds, ncolors=256)
 
     #plot it
     fig=plt.figure(1)
-    plt.xlim(xmax=float(np.shape(map)[1]))
     ax=plt.gca()
     ax.set_aspect(1)
-    pcm=ax.pcolormesh(X,Y,map,norm=norm,cmap='RdBu_r')
+    ax.invert_xaxis()
+
+    pcm=ax.pcolormesh(X,Y,map[::-1,:],norm=norm,cmap='RdBu_r')
     fig.colorbar(pcm, ax=ax, extend='both', orientation='vertical')
-    plt.xlabel(r'$wavelength$')
-    plt.ylabel(r'$distance$')
+    plt.grid(axis='x')
+    plt.grid(axis='y')
+    # plt.xlabel(r'$wavelength$')
+    # plt.ylabel(r'$distance$')
     # plt.axis('off')
     plt.show()
     return None
 
 gain=0.145
-cube_data,cube_wavelength,cube=ReadCube(path,cube_name)
-flux_all,wavelength_all=FLux(cube_data,cube_wavelength,gain)
-flux_CV,wavelength_CV=FLux(cube_data,cube_wavelength,gain,'CV')
+cube_data,cube_wavelength,dec,ra,cube=ReadCube(path,cube_name)
+flux_all,wavelength_all,ra_cut,dec_Cut=FLux(cube=cube_data,wavelength_axis=cube_wavelength,gain=gain)
+# flux_all_sub,continuum_std=ContinuumSub(flux_all,flux_all)
+# flux_all_sub_inter=CubeInterpolation(flux_all_sub,2)
+# flux_all_sub_inter_sm=CubeSmooth(flux_all_sub_inter)
+# flux_all_sub_inter_sm_map=PlotMap(flux_all_sub_inter_sm)
+# Colormap(flux_all_sub_inter_sm_map)
+flux_CV,wavelength_CV,ra_cut,dec_cut=FLux(cube=cube_data,wavelength_axis=cube_wavelength,ra=ra,dec=dec,gain=gain,emissionline=None)
 flux_CV_sub,continuum_std=ContinuumSub(flux_CV,flux_all)
-flux_CV_sub_inter=CubeInterpolation(flux_CV_sub,2)
+flux_CV_sub_inter,ra_inter,dec_inter=CubeInterpolation(flux_CV_sub,ra_cut,dec_cut,4)
 flux_CV_sub_inter_sm=CubeSmooth(flux_CV_sub_inter)
 flux_CV_sub_inter_sm_map=PlotMap(flux_CV_sub_inter_sm)
-twod_spectral=TwoDSpectral(flux_CV_sub_inter_sm)
-Colormap(twod_spectral.T,wavelength_CV)
-# plt.imshow(flux_CV_sub_inter_sm_map)
-# plt.show()
-# Colormap(flux_CV_sub_inter_sm_map)
+# twod_spectral=TwoDSpectral(flux_CV_sub_inter_sm,np.array([[0,-1],[30,160],[53,70]]))
+# twod_spectral=TwoDSpectral(flux_CV_sub_inter_sm,np.array([[0,-1],[0,-1],[53,70]]))
+# twod_spectral=TwoDSpectral(flux_CV_sub_inter_sm,np.array([[0,-1],[90,160],[40,52]]))
+# Colormap(twod_spectral.T,wavelength_CV)
+Colormap(flux_CV_sub_inter_sm_map,ra=[np.mean(ra_inter[-1,:]),np.mean(ra_inter[0,:])],dec=[np.mean(dec_inter[:,0]),np.mean(dec_inter[:,-1])])
+# for i in range(0,84,5):
+#     twod_spectral = TwoDSpectral(flux_CV_sub_inter_sm, np.array([[0, -1], [90, 160], [i, i+5]]))
+#     Colormap(twod_spectral.T,wavelength_CV)
+
 
 
 # coordinate_map,boundary=FindSource(smoothed_map,FWHM=4.6,sigma=1.2)#4.6 and 1.2 are the best value to select the three source
