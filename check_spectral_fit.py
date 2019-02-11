@@ -36,7 +36,8 @@ def CubeCut(cube=None,cube_wavelength=None,ra=None,dec=None,emissionline=None,ra
     :return: part of the initial cube and corresponding wavelength
     '''
     if emissionline=='lyman':
-        cube_cut,wavelength_cut=cube[950:1010,2:67,:],cube_wavelength[950:1010]
+        # cube_cut,wavelength_cut=cube[950:1010,2:67,:],cube_wavelength[950:1010]
+        cube_cut, wavelength_cut = cube[940:990, 2:67, :], cube_wavelength[940:990]
     elif emissionline=='CV':
         # print(cube_wavelength[1030:1200])
         # cube_cut,wavelength_cut=cube[1030:1200,2:67,:],cube_wavelength[1030:1200]
@@ -56,6 +57,8 @@ def CubeCut(cube=None,cube_wavelength=None,ra=None,dec=None,emissionline=None,ra
 
 
 
+
+
 def PlotMap(cubedata):
     '''
     plot the 2D image of the cube by summing along the wavelength axis to get the total flux for each pixel
@@ -66,7 +69,6 @@ def PlotMap(cubedata):
     map=np.sum(cubedata,axis=0)
 
     return map
-
 
 def FLux(cube=None,wavelength_axis=None,ra=None,dec=None,gain=None,emissionline=None):
     """
@@ -181,77 +183,52 @@ def FindSource(map,FWHM=3.,sigma=3.):
 
     return coordinate_map,boundary
 
-
-def Spectral(cubedata,cube_wavelength,coordinate_map,image,emissionline=False):
+def Spectral(cube,source_coordinate,wavelength):
     '''
-    plot the spectral for each selected regions
-    :param cubedata:
-    :param cube_wavelength: wavelength axis
-    :param coordinate_map: coordinates of selected pixels
-    :param emissionline: if lyman==true then only search pixels which are bright at wavelength between 4000 to 4100
-                  else search for pixels at the whole wavelength region
-    :return:
+    :param cube: cube data
+    :param source_coordinate: coordinate of the sources
+    :param wavelength: wavelength
+    :return: None
     '''
-
-    #for the whole wavelength region
-    if emissionline==False:
-        Spectral_set=IndividualPixelSpectral(cubedata,coordinate_map)
-        for i in range(len(Spectral_set)):
-            if i%3==0 and i>0:
-                plt.figure('map')
-                plt.imshow(image)
-                plt.figure(i)
-                plt.subplot(311)
-                plt.plot(cube_wavelength[800:], Spectral_set[i - 1][800:])
-                plt.title(str(coordinate_map[i-1][0]) + ',' + str(coordinate_map[i-1][1]))
-                plt.subplot(312)
-                plt.plot(cube_wavelength[800:], Spectral_set[i - 2][800:])
-                plt.title(str(coordinate_map[i-2][0]) + ',' + str(coordinate_map[i-2][1]))
-                plt.subplot(313)
-                plt.plot(cube_wavelength[800:], Spectral_set[i - 3][800:])
-                plt.title(str(coordinate_map[i-3][0]) + ',' + str(coordinate_map[i-3][1]))
-                plt.show()
-    #only for lyman-alpha wavelength region
-    else:
-        Spectral_set = EmissionLinePixelSepctral(cubedata, coordinate_map)
-        print(coordinate_map)
-        plt.figure(2)
-        plt.plot(cube_wavelength[:], Spectral_set[:])
-        plt.show()
+    spectral_set=SourceSpectral(cube,source_coordinate)
+    SpectralPlot(spectral_set,wavelength,source_coordinate)
     return None
 
-def EmissionLinePixelSepctral(cubedata,coordinate_map):
+def SourceSpectral(cube,source_coordinate):
     '''
-    sum the flux for the lyman-alpha emitter at each wavelength
-    :param cubedata: cube data
-    :param coordinate_map: contain pixels which represent lyman-alpha region
-    :return: spectral for lyman-alpha region
+    output the 1D spectral of selected sources
+    :param cube: cube data which is a 3D numpy array
+    :param source_coordinate: coordinate of selected sources which is a 2D numpy array
+    :return: spectrals
     '''
+    spectral_set=[]
+    for individual in source_coordinate:
+        cut=cube[:,individual[0]-1:individual[0]+2,individual[1]-1:individual[1]+2]#add neighboor pixels' value up to imporve SN
+        spectral_individual=np.sum(np.sum(cut,axis=1),axis=1)
+        spectral_set.append(spectral_individual)
+    spectral_set=np.array(spectral_set)
 
-    flux=cubedata[:,coordinate_map[:,0],coordinate_map[:,1]]
-    # plt.plot(range(len(flux[:, 10])), flux[:, 10])
-    # plt.show()
-    spectral=np.sum(flux,axis=1)
-    return spectral
+    return spectral_set
 
-def IndividualPixelSpectral(cubedata,coordinate_map):
+def SpectralPlot(spectral_set,wavelength,source_coordinate):
     '''
-    sum the flux at each wavelength for selected pixels
-    :param cubedata: cube data
-    :param coordinate_map: pixels selected by FindSource
-    :return: spectral for individual pixels
+    accept the spectral from SourceSpectral and plot them
+    :param spectral_set: spectral of each sources
+    :param wavelength: wavelength used to plot spectral
+    :param source_coordinate: mark the the spectral to tell to which source it belongs
+    :return: None
     '''
-
-    Spectral_set=np.zeros(1600)
-    for co in coordinate_map:
-        flux=cubedata[:, co[0] - 2:co[0] + 2, co[1] - 2:co[1] + 2]
-        # flux = cubedata[:, co[0] - 1:co[0] + 1, co[1] - 1:co[1] + 1]
-        # flux = cubedata[:, co[0], co[1]]
-        spectral = np.sum(np.sum(flux, axis=1), axis=1)
-        Spectral_set = np.vstack((Spectral_set, spectral))
-    Spectral_set = Spectral_set[1:]
-    return Spectral_set
-
+    n_source=len(spectral_set)
+    wavelength=wavelength.value
+    for i in range(1,n_source+1):
+        plt.figure(i)
+        plt.plot(wavelength,spectral_set[i-1])
+        plt.text(x=0.99*np.median(wavelength),y=np.mean(spectral_set[i-1]),s=str(source_coordinate[i-1,0])+','+str(source_coordinate[i-1,1]))
+        plt.xlabel(r'wavelength')
+        plt.ylabel(r'flux')
+        plt.title(r'spectral')
+    plt.show()
+    return None
 
 def LocateTarget(cube,target_coordinate):
 
@@ -427,8 +404,8 @@ def Colormap(map,**krg):
     dec=np.linspace(krg['dec'][0],krg['dec'][1],np.shape(map)[1])
     X,Y=np.meshgrid(dec,ra)
     Y=Y[::-1,:]
-    bounds=np.linspace(np.min(map),np.max(map),10)
-    norm = clr.BoundaryNorm(boundaries=bounds, ncolors=256)
+    bounds=np.linspace(np.min(map),np.max(map),25)
+    norm = clr.BoundaryNorm(boundaries=bounds, ncolors=310)
 
     #plot it
     fig=plt.figure(1)
@@ -449,6 +426,7 @@ def Colormap(map,**krg):
 gain=0.145
 cube_data,cube_wavelength,dec,ra,cube=ReadCube(path,cube_name)
 flux_all,wavelength_all,ra_cut,dec_Cut=FLux(cube=cube_data,wavelength_axis=cube_wavelength,gain=gain)
+
 # flux_all_sub,continuum_std=ContinuumSub(flux_all,flux_all)
 # flux_all_sub_inter=CubeInterpolation(flux_all_sub,2)
 # flux_all_sub_inter_sm=CubeSmooth(flux_all_sub_inter)
@@ -456,20 +434,12 @@ flux_all,wavelength_all,ra_cut,dec_Cut=FLux(cube=cube_data,wavelength_axis=cube_
 # Colormap(flux_all_sub_inter_sm_map)
 flux_CV,wavelength_CV,ra_cut,dec_cut=FLux(cube=cube_data,wavelength_axis=cube_wavelength,ra=ra,dec=dec,gain=gain,emissionline=None)
 flux_CV_sub,continuum_std=ContinuumSub(flux_CV,flux_all)
-flux_CV_sub_inter,ra_inter,dec_inter=CubeInterpolation(flux_CV_sub,ra_cut,dec_cut,4)
-flux_CV_sub_inter_sm=CubeSmooth(flux_CV_sub_inter)
-flux_CV_sub_inter_sm_map=PlotMap(flux_CV_sub_inter_sm)
-# twod_spectral=TwoDSpectral(flux_CV_sub_inter_sm,np.array([[0,-1],[30,160],[53,70]]))
-# twod_spectral=TwoDSpectral(flux_CV_sub_inter_sm,np.array([[0,-1],[0,-1],[53,70]]))
-# twod_spectral=TwoDSpectral(flux_CV_sub_inter_sm,np.array([[0,-1],[90,160],[40,52]]))
-# Colormap(twod_spectral.T,wavelength_CV)
-Colormap(flux_CV_sub_inter_sm_map,ra=[np.mean(ra_inter[-1,:]),np.mean(ra_inter[0,:])],dec=[np.mean(dec_inter[:,0]),np.mean(dec_inter[:,-1])])
-# for i in range(0,84,5):
-#     twod_spectral = TwoDSpectral(flux_CV_sub_inter_sm, np.array([[0, -1], [90, 160], [i, i+5]]))
-#     Colormap(twod_spectral.T,wavelength_CV)
-
-
+coordinate_source=np.array([[32,11],[22,15],[39,14]])
+Spectral(flux_CV_sub,coordinate_source,wavelength_CV)
+# flux_CV_sub_inter,ra_inter,dec_inter=CubeInterpolation(flux_CV_sub,ra_cut,dec_cut,4)
+# flux_CV_sub_inter_sm=CubeSmooth(flux_CV_sub_inter)
+# flux_CV_sub_inter_sm_map=PlotMap(flux_CV_sub_inter_sm)
+# Colormap(flux_CV_sub_inter_sm_map,ra=[np.mean(ra_inter[-1,:]),np.mean(ra_inter[0,:])],dec=[np.mean(dec_inter[:,0]),np.mean(dec_inter[:,-1])])
 
 # coordinate_map,boundary=FindSource(smoothed_map,FWHM=4.6,sigma=1.2)#4.6 and 1.2 are the best value to select the three source
 # coordinate_map,boundary=FindSource(flux_map,FWHM=3.,sigma=5.)
-# Spectral(flux_sub,cube_wavelength,coordinate_map,image=flux_map,emissionline=False)
