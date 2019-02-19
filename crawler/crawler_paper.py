@@ -1,7 +1,8 @@
 import requests
 from lxml import etree
 import os
-import time
+
+__all__=['getHtml','getContent','getDownPdf','PaperCheckDonwload']
 
 def getHtml(url):
     '''
@@ -73,8 +74,8 @@ def PaperCheckDonwload(url,xp1,xp2):
         for p in paper:
             getDownPdf(p[0],p[1],'https://www.arxiv.org')
 
-if __name__=='__main__':
-    url='https://arxiv.org/list/astro-ph/pastweek?show=361'#update url before get papers
-    xp1='//dt//*[@class="list-identifier"]//a[2]//@href'
-    xp2='//div[@class="list-title mathjax"]/text()'
-    PaperCheckDonwload(url,xp1,xp2)
+# if __name__=='__main__':
+#     url='https://arxiv.org/list/astro-ph/pastweek?show=361'#update url before get papers
+#     xp1='//dt//*[@class="list-identifier"]//a[2]//@href'
+#     xp2='//div[@class="list-title mathjax"]/text()'
+#     PaperCheckDonwload(url,xp1,xp2)

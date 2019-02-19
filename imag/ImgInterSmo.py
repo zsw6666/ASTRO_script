@@ -1,6 +1,6 @@
 import numpy as np
 
-
+__all__=['AxiesInterpolation','MapInterpolation','GussianKernel','GussianFilter','CubeInterpolation','CubeSmooth']
 def AxiesInterpolation(map, axies=0):
     '''
     interpolate value to the map

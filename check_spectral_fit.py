@@ -1,10 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import ImgInterSmo
-import CubeData
-import ImagPlot
+from cube import CubeData
+from imag import ImagPlot, ImgInterSmo
 from photutils import DAOStarFinder as sourcefinder
-
 
 
 path = '/Users/shiwuzhang/ASTRO/MAMMOTH_KCWI'

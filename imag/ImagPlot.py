@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as clr
 
+__all__=['PlotMap','Colormap']
 
 def PlotMap(cubedata,cube_wavelength,waveprint=True,emissionline=None):
     '''

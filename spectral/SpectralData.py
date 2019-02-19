@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import CubeData
+from cube import CubeData
 
-
+__all__=['Spectral','SourceSpectral','SpectralPlot','TwoDSpectral']
 def Spectral(cube, source_coordinate, wavelength):
     '''
     :param cube: cube data
