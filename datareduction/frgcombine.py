@@ -13,8 +13,9 @@ class Fringe(object):
 	'''
 	def __init__(self,masklist=[],ccdlist=[]):	
 		self.masklist=masklist
-		self.ccdlist=ccdlist	
-
+		self.ccdlist=ccdlist
+		self.imgdic=self._fringegenerator()
+        self.scaledic=self._scalegenerator()
 	def _fringegenerator(self):
 		'''
 		generate combined fringe images
@@ -32,19 +33,6 @@ class Fringe(object):
 		for key in bkgdic.keys():
 			bkgdic[key]=np.median(bkgdic[key])
 		return bkgdic
-	@property
-	def imgdic(self):
-		return self._imgdic
-	@imgdic.getter
-	def imgdic(self):
-		return self._fringegenerator()
-	@property
-	def scale(self):
-		return self._scale
-
-	@scale.getter
-	def scale(self):
-		return self._scalegenerator()
 
 	def fitsgenerator(self):
 		for key in self.imgdic.keys():
