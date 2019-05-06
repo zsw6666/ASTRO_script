@@ -1,10 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as clr
+from pylab import pcolor,colorbar
+from mpl_toolkits.mplot3d import Axes3D
 
 __all__=['PlotMap','Colormap']
 
-def PlotMap(cubedata,cube_wavelength,waveprint=True,emissionline=None):
+def PlotMap(cubedata,emissionline=None):
     '''
     plot the 2D image of the cube by summing along the wavelength axis to get the total flux for each pixel
     :param cubedata: 3D cube data
@@ -12,48 +14,24 @@ def PlotMap(cubedata,cube_wavelength,waveprint=True,emissionline=None):
     '''
 
     if emissionline=='lyman':
-        map=np.sum(cubedata[950:1010,2:67,:],axis=0)
-        wavelengthrange=cube_wavelength[950:1010]
+        map=np.sum(cubedata[950:1010,:,:],axis=0)
     elif emissionline=='CV':
-        map=np.sum(cubedata[1050:1330,2:67,:],axis=0)
-        wavelengthrange=cube_wavelength[1050:1330]
+        map=np.sum(cubedata[1050:1330,:,:],axis=0)
     else:
-        map = np.sum(cubedata[:, 2:67, :], axis=0)
-        wavelengthrange=cube_wavelength
-
-    if waveprint:
-        print(wavelengthrange)
+        map = np.sum(cubedata[:, :, :], axis=0)
 
 
     return map
 
-def Colormap(map, **krg):
-    '''
-    plot the map
-    :param map: array of the map
-    :return: none
-    '''
+def Colormap(map,x,y):
+    plt.figure()
+    img=pcolor(x,y,map)
+    colorbar()
+    return img
 
-    # set the axis and color
-    ra = np.linspace(krg['ra'][1], krg['ra'][0], np.shape(map)[0])
-    dec = np.linspace(krg['dec'][0], krg['dec'][1], np.shape(map)[1])
-    X, Y = np.meshgrid(dec, ra)
-    Y = Y[::-1, :]
-    bounds = np.linspace(np.min(map), np.max(map), 25)
-    norm = clr.BoundaryNorm(boundaries=bounds, ncolors=310)
-
-    # plot it
-    fig = plt.figure(1)
-    ax = plt.gca()
-    ax.set_aspect(1)
-    ax.invert_xaxis()
-
-    pcm = ax.pcolormesh(X, Y, map[::-1, :], norm=norm, cmap='RdBu_r')
-    fig.colorbar(pcm, ax=ax, extend='both', orientation='vertical')
-    plt.grid(axis='x')
-    plt.grid(axis='y')
-    # plt.xlabel(r'$wavelength$')
-    # plt.ylabel(r'$distance$')
-    # plt.axis('off')
+def ThreeDmap(twodmap,x,y):
+    X, Y = np.meshgrid(x, y)
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    ax.plot_surface(X, Y, twodmap, rstride=1, cstride=1, cmap=plt.get_cmap('rainbow'))
     plt.show()
-    return None

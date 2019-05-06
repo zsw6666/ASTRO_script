@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from cube import CubeData
 
-__all__=['Spectral','SourceSpectral','SpectralPlot','TwoDSpectral']
+__all__=['Spectral','SourceSpectral','SpectralPlot','TwoDSpectral','Mapspectral']
+
 def Spectral(cube, source_coordinate, wavelength):
     '''
     :param cube: cube data
@@ -15,26 +16,35 @@ def Spectral(cube, source_coordinate, wavelength):
     return None
 
 
-def SourceSpectral(cube, source_coordinate):
+def SourceSpectral(cube, position,size):
     '''
     output the 1D spectral of selected sources
     :param cube: cube data which is a 3D numpy array
-    :param source_coordinate: coordinate of selected sources which is a 2D numpy array
+    :param position: where you want the spectral(physical position)
     :return: spectrals
     '''
-    spectral_set = []
-    for individual in source_coordinate:
-        # add neighboor pixels' value up to imporve SN
-        cut = cube[:, individual[0]-1:individual[0] +
-                   2, individual[1]-1:individual[1]+2]
-        spectral_individual = np.sum(np.sum(cut, axis=1), axis=1)
-        spectral_set.append(spectral_individual)
-    spectral_set = np.array(spectral_set)
+    selected_region=cube[:,position[0]-round(size[0]/2.):position[0]+round(size[0]/2.),position[1]-round(size[1]/2.):position[1]+round(size[1]/2.)]
+    onedspectral=np.sum(np.sum(selected_region,axis=1),axis=1)
 
-    return spectral_set
+    return onedspectral
 
-
-def SpectralPlot(spectral_set, wavelength, source_coordinate):
+def Mapspectral(fluxcube,size):
+    width=int(np.shape(fluxcube)[1]/size[0])
+    length=int(np.shape(fluxcube)[2]/size[1])
+    spectral_list=[]
+    position_list=[]
+    k=0
+    for i in range(1,width):
+        for j in range(1,length):
+            k+=1
+            position=[i*size[0],j*size[1]]
+            ondspectral=SourceSpectral(fluxcube,position,size)
+            print(k)
+            print(position)
+            spectral_list.append(ondspectral)
+            position_list.append(position)
+    return spectral_list,position_list
+def SpectralPlot(onedspectral, wavelength,title=None):
     '''
     accept the spectral from SourceSpectral and plot them
     :param spectral_set: spectral of each sources
@@ -42,18 +52,12 @@ def SpectralPlot(spectral_set, wavelength, source_coordinate):
     :param source_coordinate: mark the the spectral to tell to which source it belongs
     :return: None
     '''
-    n_source = len(spectral_set)
     wavelength = wavelength.value
-    for i in range(1, n_source+1):
-        plt.figure(i)
-        plt.plot(wavelength, spectral_set[i-1])
-        plt.text(x=0.99*np.median(wavelength), y=np.mean(spectral_set[i-1]), s=str(
-            source_coordinate[i-1, 0])+','+str(source_coordinate[i-1, 1]))
-        plt.xlabel(r'wavelength')
-        plt.ylabel(r'flux')
-        plt.title(r'spectral')
-    plt.show()
-    return None
+    plt.title(title)
+    plt.xlabel(r'$wavelength \ A$')
+    plt.ylabel(r'$flux \ erg/s/m^{2}/ \AA$')
+    img=plt.plot(wavelength,onedspectral)
+    return img
 
 def TwoDSpectral(cube, rang=None):
     '''

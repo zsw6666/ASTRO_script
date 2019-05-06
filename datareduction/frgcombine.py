@@ -1,6 +1,7 @@
 from astropy.io import fits
 import os
 import numpy as np
+__all__=['Fringe','MaskHSource','Combine','FitsSelect','SubtractFringe','Run']
 '''
 This script is used to subtract fringe from the object image
 Written by SW Zhang

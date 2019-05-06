@@ -1,6 +1,22 @@
 import numpy as np
 
-__all__=['AxiesInterpolation','MapInterpolation','GussianKernel','GussianFilter','CubeInterpolation','CubeSmooth']
+__all__=['AxiesInterpolation','MapInterpolation','GussianKernel','GussianFilter','CubeInterpolation','CubeSmooth','InSmimg']
+
+def cellInterpolation(onedarray):
+    former=onedarray[:-1]
+    latter=onedarray[1:]
+    intercell=(former+latter)/2.
+    newarray=np.zeros((1,np.size(intercell)+np.size(onedarray)))[0]
+    for i in range(len(newarray)):
+        if i%2==0:
+            newarray[i]=onedarray[int(i/2)]
+        else:
+            newarray[i]=intercell[int((i-1)/2)]
+    return newarray
+def Onedinterpolation(onedarray,internum):
+    for i in range(internum):
+        onedarray=cellInterpolation(onedarray)
+    return onedarray
 def AxiesInterpolation(map, axies=0):
     '''
     interpolate value to the map
@@ -140,3 +156,9 @@ def CubeSmooth(cube):
         cube_sm[i] = GussianFilter(cube[i], kernel)
 
     return cube
+
+def InSmimg(map,internum,sigma):
+    map=MapInterpolation(map,internum)
+    kernel=GussianKernel(sigma)
+    map=GussianFilter(map,kernel)
+    return map

@@ -3,7 +3,7 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 from . import IO
-
+__all__=['ArrayStat','RepeatRmLV','RmlargeValue','LocateDP','CorrectDirtyPoint','Run']
 '''
 this script is used to remove the dirty points in iamges,
 dirty points are some structrues in image whose size is not large and value is 

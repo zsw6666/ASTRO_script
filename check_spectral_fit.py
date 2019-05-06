@@ -55,8 +55,7 @@ def LocateTarget(cube, target_coordinate):
 
 gain = 0.145
 cube_data, cube_wavelength, dec, ra, cube = CubeData.ReadCube(path, cube_name)
-flux_all, wavelength_all, ra_cut, dec_Cut = CubeData.FLux(
-    cube=cube_data, wavelength_axis=cube_wavelength, gain=gain)
+flux_all, wavelength_all, ra_cut, dec_Cut = CubeData.FLux(cube=cube_data, wavelength_axis=cube_wavelength, gain=gain)
 
 # flux_all_sub,continuum_std=CubeData.ContinuumSub(flux_all,flux_all)
 # flux_all_sub_inter=ImgInterSmo.CubeInterpolation(flux_all_sub,2)
