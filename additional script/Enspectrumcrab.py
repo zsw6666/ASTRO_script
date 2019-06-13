@@ -2,24 +2,39 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datareduction import IO
 
-def io(path,name):
+def io(path,name,mark=None):
     '''
     read data
     :param path: where
     :param name: name of data file
     :return: data
     '''
-    data=IO.txt_io(path,name)
+    data=IO.txt_io(path,name,mark)
     return data
 def run():
     '''
     for each channel, we should use the flux at this channel to generate the psf and superpose the phtons at each channel then generate the observed spectrum
     '''
     data=io('/Users/shiwuzhang/ASTRO/HW/高能天体物理/极光计划作业/02','crab.txt')
+    data2=io('/Users/shiwuzhang/ASTRO/HW/高能天体物理/极光计划作业/01','effective erea.txt')
+    energylist=[]
+    effecarealist=[]
+    for i in data2:
+        energy=i[0]*1e-3
+        effecarea=i[1]
+        energylist.append(energy)
+        effecarealist.append(effecarea)
+    energylist=np.array(energylist)
+    effecarealist=np.array(effecarealist)
+    energylist,effecarealist=Interpolation(energylist,effecarealist)
     energy,fwhm,intensity=data[:,0],data[:,1],data[:,2]
+    effectiveerea = Fitfunc(energylist, effecarealist, energy)
+    effectiveerea[np.where(effectiveerea<0)]=effectiveerea[np.where(effectiveerea<0)[0][-1]+1]
     source_spectrum=Spectrumgenerator(energy,fwhm,intensity)
-    bkg_intensity=Bkggenerator(energy)
-    bkg_spectrum=Spectrumgenerator(energy,fwhm,bkg_intensity)
+    plt.plot(energy, source_spectrum, c='b', label='source')
+    source_spectrum=source_spectrum*effectiveerea
+    bkg_spectrum=Bkggenerator(energy)
+    # bkg_spectrum=Spectrumgenerator(energy,fwhm,bkg_intensity)
     spectrum=bkg_spectrum+source_spectrum
     energy_distribution=normalization(spectrum,fwhm)
     photonstime_list=Photonsgenerator(np.sum(spectrum*2*fwhm))
@@ -27,17 +42,18 @@ def run():
     photondis=energy_distribution*photonnum_total
     new_spectrum=photondis/1800.
     plt.figure(1)
-    plt.plot(energy,spectrum,c='r',label='source+bkg')
-    plt.plot(energy,source_spectrum,c='b',label='source')
-    plt.plot(energy,bkg_spectrum,c='g',label='bkg')
+    # plt.plot(energy,intensity,c='y',label='raw')
+    # plt.plot(energy,spectrum,c='r',label='source+bkg')
+    # plt.plot(energy,source_spectrum,c='b',label='source')
+    # plt.plot(energy,bkg_spectrum,c='g',label='bkg')
     plt.title(r'$spectrum$')
     plt.xlabel(r'$energy \ (KeV)$')
-    plt.ylabel(r'$Intensity \ (photons \cdot cm^{-2} \cdot s^{-1} \cdot KeV^{-1})$')
+    plt.ylabel(r'$Intensity \ (photons \cdot s^{-1} \cdot KeV^{-1})$')
     plt.legend()
     plt.figure(2)
     plt.title(r'$spectrum$')
     plt.xlabel(r'$energy \ (KeV)$')
-    plt.ylabel(r'$Intensity \ (photons \cdot cm^{-2} \cdot s^{-1} \cdot KeV^{-1})$')
+    plt.ylabel(r'$Intensity \ (photons \cdot s^{-1} \cdot KeV^{-1})$')
     plt.plot(energy,new_spectrum)
     # plt.plot(energy,intensity)
     plt.show()
@@ -145,6 +161,23 @@ def normalization(spectrum,fwhm):
     Luminosity=np.sum(flux)
     distribution=spectrum/Luminosity
     return distribution
+def Interpolation(x,y):
+    k1=(y[1]-y[0])/(x[1]-x[0])
+    k2=(y[-1]-y[-2])/(x[-1]-x[-2])
+    deta_x=0.08
+    for i in range(25):
+        x=np.append(x[0]-deta_x,x)
+        x=np.append(x,x[-1]+deta_x)
+        y=np.append(y[0]-k1*deta_x,y)
+        y=np.append(y,y[-1]+k2*deta_x)
+    return x,y
+def Fitfunc(x,y,z,n=14):
+    fitpara=np.polyfit(x,y,n)
+    s=np.zeros(np.shape(z))
+    for i in range(len(fitpara)):
+        s+=fitpara[i]*(z**(n-i))
+    return s
+
 run()
 
 

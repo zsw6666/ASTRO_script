@@ -1,3 +1,3 @@
-from .interpolation import *
+from .statistic import *
 
-__all__=['interpolation','convolution']
+__all__=['statistic']

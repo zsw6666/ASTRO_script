@@ -1,6 +1,6 @@
 import numpy as np
+from scipy import signal, ndimage
 
-__all__=['AxiesInterpolation','MapInterpolation','GussianKernel','GussianFilter','CubeInterpolation','CubeSmooth','InSmimg']
 
 def cellInterpolation(onedarray):
     former=onedarray[:-1]
@@ -13,10 +13,12 @@ def cellInterpolation(onedarray):
         else:
             newarray[i]=intercell[int((i-1)/2)]
     return newarray
+
 def Onedinterpolation(onedarray,internum):
     for i in range(internum):
         onedarray=cellInterpolation(onedarray)
     return onedarray
+
 def AxiesInterpolation(map, axies=0):
     '''
     interpolate value to the map
@@ -49,7 +51,6 @@ def AxiesInterpolation(map, axies=0):
 
     return final_map
 
-
 def MapInterpolation(map, internum):
     '''
     interpolate value to the map
@@ -64,66 +65,6 @@ def MapInterpolation(map, internum):
     map = map[::-1]
 
     return map
-
-
-def GussianKernel(sigma):
-    '''
-    This is guassian kernel function (standard 2D gussian distribution)
-    first generate N random numbers which obey gussian distribution
-    and counts the number of points(Xcounts) in each x bins
-    then define counts in each x bins as Ny and counts the number of points(Ycounts) in each y bins
-    finally save this number in image
-
-    :param sigma: standard deviation
-    :return: 2D standard guassian kernel function (5*5)
-    '''
-
-    mux, muy = 0, 0
-    scalex, scaley = sigma
-    kernel = np.zeros((5, 5))  # initilize the image
-    # N photons obey standard distribution
-    Px = np.random.normal(loc=mux, scale=scalex, size=10000)
-    # statistic number of photons in each X bins
-    Xcounts, Xbins = np.histogram(Px, np.linspace(-5, 5, 6))
-
-    # for n in each x bins,generate n points obey normal distribution and save the value in image varaible
-    Ybins = np.linspace(-5, 5, 6)
-    for i in range(len(Xcounts)):
-        Py = np.random.normal(loc=muy, scale=scaley, size=Xcounts[i])
-        Ycounts, Ybins = np.histogram(Py, Ybins)
-        kernel[:, i] = Ycounts  # rewrite the image
-    kernel = kernel/np.sum(kernel)
-
-    return kernel
-
-
-def GussianFilter(map, kernel):
-    '''
-    This function use gussian kernel to smooth the image
-
-    :param map: original image
-    :param kernel: gussian kernel
-    :return: smoothed image
-    '''
-
-    # to calculate some pixels on the boundary of image,it first expands the original image
-    kernel_map = np.zeros(np.array(np.shape(map))+np.array((4, 4)))
-    kernel_map[2:np.shape(kernel_map)[0]-2, 2:np.shape(kernel_map)[1]-2] = map
-
-    # create new map
-    map_shape = np.shape(map)
-    new_map = np.zeros(map_shape)
-
-    # calculate the value for each pixel
-    for x in range(2, map_shape[0]):
-        for y in range(2, map_shape[1]):
-            # i_map=kernel_map[x-2:x+3,y-2:y+3]
-            # pixel_value=kernel*kernel_map[x-2:x+3,y-2:y+3]
-            # s=np.sum(kernel*kernel_map[x-2:x+3,y-2:y+3])
-            new_map[x-2, y-2] = np.sum(kernel*kernel_map[x-2:x+3, y-2:y+3])
-
-    return new_map[:-2, :-2]
-
 
 def CubeInterpolation(cube, ra, dec, internum):
     '''
@@ -141,24 +82,56 @@ def CubeInterpolation(cube, ra, dec, internum):
     dec_inter = MapInterpolation(dec, internum)
     return cube_inter, ra_inter, dec_inter
 
-
-def CubeSmooth(cube):
+def CubeSmooth(cube,sigma=(3.,)):
     '''
     smooth the image of every wavelength in this cube
     :param cube: cube waiting smoothing
     :return: smoothed cube
     '''
-    kernel = GussianKernel([3., 3.])
-    shape0 = np.shape(GussianFilter(cube[0], kernel))
-    shape1 = np.shape(cube)
-    cube_sm = np.zeros((shape1[0], shape0[0], shape0[1]))
     for i in range(len(cube)):
-        cube_sm[i] = GussianFilter(cube[i], kernel)
-
+        cube[i,2:67,:]=ndimage.gaussian_filter(cube[i,2:67,:],sigma)
     return cube
 
 def InSmimg(map,internum,sigma):
+    '''
+    interpolate and smooth the image
+    :param map: map waited to be interpolated and smoothed
+    :param internum: paramter used to control the interpolation
+    :param sigma: parameter used to control the smooth
+    :return: interpolated and smoothed image
+    '''
+
     map=MapInterpolation(map,internum)
-    kernel=GussianKernel(sigma)
-    map=GussianFilter(map,kernel)
+    map=ndimage.gaussian_filter(map,sigma)
     return map
+
+def NoiseFilter(data,N,wn):
+    '''
+    reduce the noise
+    :param data: data waited to be rduced
+    :param N: filter-control parameter
+    :param wn: filter-control parameter
+    :return: filtered data
+    '''
+
+    b, a = signal.butter(N, wn,'lowpass')
+    filtereddata = signal.filtfilt(b, a, data)
+    return filtereddata
+
+def Imgseeinglimit(img,size=[3,1]):
+    '''
+    consider the seeing when access the spectra
+    :param img: image used to do the seeing limit(我不知道这里应该叫啥......就是在用到光谱的时候应该考虑一个seeing之内的)
+    :param size: size in unit of pixel within a seeing
+    :return:
+    '''
+
+
+    img_shape=np.shape(img)
+
+    #for each cell(within a seeing), use the mean intensity as the intensity of each pixel within the cell
+    for i in range(1,int(img_shape[0]/size[0])):
+        for j in range(1,int(img_shape[1]/size[1])):
+            img[int((i-1)*size[0]):int(i*size[0]),int((j-1)*size[1]):int(j*size[1])]=np.mean(img[int((i-1)*size[0]):int(i*size[0]),int((j-1)*size[1]):int(j*size[1])])
+
+    return img

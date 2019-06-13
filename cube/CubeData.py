@@ -1,11 +1,21 @@
 import os
 import numpy as np
-from datareduction import WCS
+from spectral import SpectralData
 from spectral_cube import SpectralCube
+from imag import ImagPlot,ImgInterSmo
 from astropy import constants as const
 from astropy import units as u
+from astropy.coordinates import Angle
+from astropy.io import fits
 
-__all__=['ReadCube','CubeCut','FLux','ContinuumSub','ContinuumEst','BackgroundEstimation','ImageBackgroundSubtraction','CubeBackgroundSubtraction','WCS']
+'''
+This script is used to access the datacube
+'''
+
+def AccessCube(path,cube_name):
+    os.chdir(path)
+    cube = SpectralCube.read(cube_name)
+    return cube
 
 def ReadCube(path, cube_name):
     '''
@@ -15,17 +25,27 @@ def ReadCube(path, cube_name):
     :return: 3D data and wavelength axis
     '''
 
-    os.chdir(path)
-    cube = SpectralCube.read(cube_name)
+    cube=AccessCube(path,cube_name)
     wcs = cube.world[:]
     print(cube)
-    # ra1, dec1 = (wcs[:, :, 0].T)[::-1, :], (wcs[:, :, 1].T)[:, ::-1]
-    # ra=cube.world[0,:,:][2].value
-    # dec=cube.world[0,:,:][1].value
     return cube._data, cube.spectral_axis, wcs, cube
 
+def Editheader(path,name,keyword,newvalue):
+    os.chdir(path)
+    fitsfile=fits.open(name,mode='update')
+    fitsfile[0].header[keyword]=newvalue
+    fitsfile.close()
+    return None
 
-def CubeCut(cube=None, cube_wavelength=None, emissionline=None, rang=None):
+def Readheader(path,name):
+    os.chdir(path)
+    fitsfile = fits.open(name)
+    header=fitsfile[0].header
+    fitsfile.close()
+    return header
+
+
+def CubeCut(cube=None, cube_wavelength=None, emissionline=None,waverange=None):
     '''
     cut the cube and return the part we need
     :param cube: cube data
@@ -34,19 +54,12 @@ def CubeCut(cube=None, cube_wavelength=None, emissionline=None, rang=None):
     :param rang: if set emission line to manual,then this parameter must be given
     :return: part of the initial cube and corresponding wavelength
     '''
-    if emissionline == 'lyman':
-        # cube_cut,wavelength_cut=cube[950:1010,2:67,:],cube_wavelength[950:1010]
-        cube_cut, wavelength_cut = cube[940:990,
-                                        2:67, :], cube_wavelength[940:990]
-    elif emissionline == 'CV':
-        # print(cube_wavelength[1030:1200])
-        # cube_cut,wavelength_cut=cube[1030:1200,2:67,:],cube_wavelength[1030:1200]
-        cube_cut, wavelength_cut = cube[1030:1500,
-                                        2:67, :], cube_wavelength[1030:1500]
-    elif emissionline == 'manual':
-        cube_cut, wavelength_cut = cube[rang[0]:rang[1],2:67,:],cube_wavelength[rang[0]:rang[1]]
+    cutrange = SpectralData.Findwavelength(cube_wavelength, waverange)
+    if emissionline == 'manual':
+        cube_cut, wavelength_cut = cube[cutrange[0]:cutrange[1],:,:],cube_wavelength[cutrange[0]:cutrange[1]]
     else:
-        cube_cut, wavelength_cut = cube[:, 2:67, :], cube_wavelength
+        # cube_cut, wavelength_cut = cube[:, 2:67, :], cube_wavelength
+        cube_cut, wavelength_cut = cube[:, :, :], cube_wavelength
 
     return cube_cut, wavelength_cut
 
@@ -82,8 +95,6 @@ def ContinuumEst(flux, ran=[1300, 1500]):
     continuum_std = np.std(flux[ran[0]:ran[1], :, :], axis=0)
 
     return continuum, continuum_std
-
-
 def ContinuumSub(flux, flux_all):
     '''
     subtract continuum component
@@ -98,8 +109,6 @@ def ContinuumSub(flux, flux_all):
         flux_sub[i, :, :] = flux[i, :, :]-continuum
     flux_std = continuum_std
     return flux, flux_std
-
-
 def BackgroundEstimation(image, region):
     '''
     estimate background value of the given image
@@ -114,8 +123,6 @@ def BackgroundEstimation(image, region):
         image[region[0, 0]:region[0, 1], region[1, 0]:region[1, 1]])
 
     return background, std_background
-
-
 def ImageBackgroundSubtraction(image, background):
     '''
     subtract background from the given image
@@ -126,8 +133,6 @@ def ImageBackgroundSubtraction(image, background):
 
     image = image-background
     return image
-
-
 def CubeBackgroundSubtraction(cube):
     '''
     subtract background from the given cube
@@ -149,8 +154,142 @@ def WCS(wcsmap):
     :return: ra and dec all 1D array
     '''
     ramap=np.mean(wcsmap[2],axis=0)
-    ra=np.mean(ramap[2:67,:],axis=1)
+    ra=np.mean(ramap[:,:],axis=1)
     decmap=np.mean(wcsmap[1],axis=0)
     dec=np.mean(decmap,axis=0)
 
     return ra,dec
+
+def Findposition(ramap,decmap,postion):
+    '''
+    find the physical coordinate corresponding to ra and dec
+    :param ramap: 2D array of ra
+    :param decmap: 2D array of dec
+    :param postion: position selected
+    :return: physical coordinate of the position selected
+    '''
+
+    ra_physical=np.where(abs(postion[0]-ramap)<=5.5e-5)
+    dec_physical=np.where(abs(postion[1]-decmap)<=2e-4)
+    return ra_physical[0][0],dec_physical[0][0]
+
+def MarkSource(twodmap,ramap,decmap,position):
+    '''
+    mark the position selected
+    :param twodmap: image
+    :param ramap: 2D array of ra
+    :param decmap: 2D array of dec
+    :param position: postion selected
+    :return: marked 2D image
+    '''
+
+    ra_physical,dec_physical=Findposition(ramap,decmap,position)
+    twodmap[ra_physical-round(5/2):ra_physical+round(5/2),dec_physical-round(3/2):dec_physical+round(3/2)]=0.5*np.min(twodmap)
+    return twodmap
+
+def Findabsorption(fluxcube,cubewavelength,abrange,upperrange,lowerrange,xaxis,yaxis):
+    medianimg,axis1,axis2=ImagPlot.Cutmap(fluxcube,cubewavelength,abrange,xaxis,yaxis)
+    upperimg,axis1,axis2=ImagPlot.Cutmap(fluxcube,cubewavelength,upperrange,xaxis,yaxis)
+    lowerimg,xaxis,yaxis=ImagPlot.Cutmap(fluxcube,cubewavelength,lowerrange,xaxis,yaxis)
+    umimg=upperimg-medianimg
+    lmimg=lowerimg-medianimg
+    img=np.array([umimg,lmimg])
+    img=np.median(img,axis=0)
+    return img,umimg,lmimg,xaxis,yaxis
+
+def Coordinateconvert(position):
+    ra=Angle(str(position[0])+'d')
+    dec=Angle(str(position[1])+'d')
+
+    return ra.hms,dec.dms
+
+def Imgreadout(img,header,name):
+    '''
+    convert the image to fits file
+    :param img: image of the fits file
+    :param header: header fo the fits file
+    :param name: name of the fits file
+    :return: None
+    '''
+
+    hdulist=fits.HDUList()
+    imghdu=fits.ImageHDU(data=img,header=header)
+    hdulist.append(imghdu)
+    hdulist.writeto(name)
+    return None
+
+def Cubeweightedmean(cube,weight):
+    '''
+    use to calculate the flux-weighted velocity map
+    :param cube: datacube
+    :param weight: velocity correspond to the wavelength
+    :return: flux-weighted velocity map
+    '''
+
+    #for each wavelength, smooth the image firstly
+    cube=ImgInterSmo.CubeSmooth(cube,[1.5,0.428])
+
+    #sum the intensity for each pixel as the denominator
+    #find the pxiel with negative flux and repalce them with a very high value,
+    #for these kind of pixel, there's no emiision line, with this step when calculate
+    #the velocity, it will be a very small value(very close to zero) which will not influence
+    #the velocity map
+    totalmap = np.sum(cube, axis=0)
+    totalmap[np.where(totalmap<=0.)]=1e8
+
+    #for image of each wavelength, multiply it with the weight(image is the flux array and weight is the velocity corresponding
+    #to the wavelength )
+    for i in range(len(cube)):
+        cube[i,:,:]=cube[i,:,:]*weight[i]
+
+    #divide the multipiled cube by the totalmap to generate the flux-weighted velocity map
+    meanmap=np.sum(cube,axis=0)/totalmap
+    # meanmap[np.where(meanmap==np.min(meanmap))]=0.
+    return meanmap
+
+def Angle2distance(ra,dec):
+    '''
+    convert ra,dec to angle distance to the center of the image
+    :param ra: ra
+    :param dec: dec
+    :return: angle distance from the center of the image
+    '''
+
+    ra,dec=ra.to(u.rad),dec.to(u.rad)
+    ra_dis,dec_dis=(ra-np.median(ra)).to(u.arcsec),(dec-np.mean(dec)).to(u.arcsec)
+
+    return ra_dis,dec_dis
+
+def CubeNoiseFilter(cube,N=5,wn=.3):
+    '''
+    reduce the noise for the spectra of each pixel
+    :param cube: datacube
+    :param N: control the filter
+    :param wn: also used to control the filter
+    :return: noise-filtered datacube
+    '''
+
+    shape=np.shape(cube)
+
+    #for each pixel reduce the noise
+    for i in range(shape[1]):
+        for j in range(shape[2]):
+            cube[:,i,j]=ImgInterSmo.NoiseFilter(cube[:,i,j],N,wn)
+    return cube
+
+def Cubeseeinglimit(cube,size=[3.,1.]):
+    '''
+    because the length and width of each pixel stand for different angle scale, for ra the angle scale
+    for each pixel is 0.38 arcsec, so use three pixels along ra axis which corresponds to 1.14 arcsec
+    for dec, the angle scale for single pxiel is 1.35 arcsec. So use 3*1 Rectangle as a cell.
+    :param cube: datacube
+    :param size: size of the cell
+    :return: datacube after considering the seeing
+    '''
+
+    cube_shape=np.shape(cube)
+
+    #for each wavelength
+    for i in range(cube_shape[0]):
+        cube[i,:,:]=ImgInterSmo.Imgseeinglimit(cube[i,:,:],size)
+    return cube

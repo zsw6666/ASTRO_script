@@ -1,24 +1,16 @@
 from astropy.io import fits
+from astropy.wcs import WCS
 import numpy as np
-import os
 
 
-def txt_io(path,txtname,mark=None,celltype=None):
-    '''
-    read data from txt and return numpy array
-    :param path: path of the txt
-    :param celltype: data type for each column,for exaple:['i8','f8','S5']
-    i8: int 8, f8: float 8, S5: string 5
-    :param txtname: its name
-    :param mark: how data in txt seperated(spaceline or ,)
-    :return: numpy array of data in txt
-    '''
-    os.chdir(path)
-    txt_file=np.genfromtxt(txtname,dtype=celltype,delimiter=mark)
-    return txt_file
+def txt_io(path,txtname):
+    with open(path+'/'+txtname) as txtfile:
+        containlist=[]
+        for i in txtfile.readlines():
+            containlist.append(i[:-1])
+    return containlist
 
-
-def GetImg(fits_name,ext=0):
+def Accessfits(fits_name,ext=0):
     '''
     get image of the fits you can also appoint which extension
     :param fits_name: name of fits you should cd to the dictionary of the fits first
@@ -26,8 +18,10 @@ def GetImg(fits_name,ext=0):
     '''
     fits_file=fits.open(fits_name,'readonly')
     data=fits_file[ext].data
+    header=fits_file[ext].header
+    wcs=WCS(header)
     fits_file.close()
-    return data
+    return data,header,wcs
 
 def UpdateImg(fits_name,new_img,ext=0):
     '''
