@@ -239,11 +239,12 @@ def Cubeweightedmean(cube,weight):
 
     #for image of each wavelength, multiply it with the weight(image is the flux array and weight is the velocity corresponding
     #to the wavelength )
+    cube_vel=cube.copy()
     for i in range(len(cube)):
-        cube[i,:,:]=cube[i,:,:]*weight[i]
+        cube_vel[i,:,:]=cube_vel[i,:,:]*weight[i]
 
     #divide the multipiled cube by the totalmap to generate the flux-weighted velocity map
-    meanmap=np.sum(cube,axis=0)/totalmap
+    meanmap=np.sum(cube_vel,axis=0)/totalmap
     # meanmap[np.where(meanmap==np.min(meanmap))]=0.
     return meanmap
 

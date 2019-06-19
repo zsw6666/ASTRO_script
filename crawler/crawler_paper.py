@@ -35,7 +35,7 @@ def getDownPdf(pdf_id,pdf_title,url0):
     '''
 
     print('downloading '+pdf_title+' ....')
-    os.chdir('/Users/shiwuzhang/ASTRO/paper')
+    os.chdir('/Users/shiwuzhang/work&study/ASTRO/paper')
     print(pdf_id)
     url=url0+pdf_id+'.pdf'
     print(url)

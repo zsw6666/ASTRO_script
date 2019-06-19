@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from datareduction import IO
+
 
 def io(path,name,mark=None):
     '''
@@ -9,14 +9,14 @@ def io(path,name,mark=None):
     :param name: name of data file
     :return: data
     '''
-    data=IO.txt_io(path,name,mark)
+    data=np.genfromtxt(path+name)
     return data
 def run():
     '''
     for each channel, we should use the flux at this channel to generate the psf and superpose the phtons at each channel then generate the observed spectrum
     '''
-    data=io('/Users/shiwuzhang/ASTRO/HW/高能天体物理/极光计划作业/02','crab.txt')
-    data2=io('/Users/shiwuzhang/ASTRO/HW/高能天体物理/极光计划作业/01','effective erea.txt')
+    data=io('/Users/shiwuzhang/work&study/ASTRO/HW/高能天体物理/极光计划作业/02/','crab.txt')
+    data2=io('/Users/shiwuzhang/work&study/ASTRO/HW/高能天体物理/极光计划作业/01/','effective erea.txt')
     energylist=[]
     effecarealist=[]
     for i in data2:
@@ -33,6 +33,10 @@ def run():
     source_spectrum=Spectrumgenerator(energy,fwhm,intensity)
     plt.plot(energy, source_spectrum, c='b', label='source')
     source_spectrum=source_spectrum*effectiveerea
+    delta_energy=energy[1:]-energy[:-1]
+    interval=np.where((energy>=2.) & (energy<=8.))
+    flux=np.sum(delta_energy[interval]*source_spectrum[interval])
+    print(flux)
     bkg_spectrum=Bkggenerator(energy)
     # bkg_spectrum=Spectrumgenerator(energy,fwhm,bkg_intensity)
     spectrum=bkg_spectrum+source_spectrum

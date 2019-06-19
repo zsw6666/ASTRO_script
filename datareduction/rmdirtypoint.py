@@ -104,5 +104,5 @@ def Run(path,fitsname):
 
 
 if __name__=='__main__':
-    Run('/Users/shiwuzhang/ASTRO','lbcb180515_LBT-2018A-C1657-1_02_03.fits')
+    Run('/Users/shiwuzhang/work&study/ASTRO','lbcb180515_LBT-2018A-C1657-1_02_03.fits')
 
