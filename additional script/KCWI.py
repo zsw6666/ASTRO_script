@@ -3,7 +3,6 @@ from spectral import SpectralData
 from imag import ImagPlot,ImgInterSmo
 from datareduction import IO
 from matplotlib import pyplot as plt
-from matplotlib import cm
 from astropy import units as u
 from pylab import pcolor
 import numpy as np
@@ -34,7 +33,7 @@ def Mapspectral(waverange=[3800.,4200.]):
 
 
     #read the datacube
-    flux,wavelength,wcs=Cubepre('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI','1441+4003_comb_ss_icubes.fits')
+    flux,wavelength,wcs=Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits')
 
     #generate spectra for each postion, spectra_list is a list contains spectra for each postion
     spectral_list,position_list=SpectralData.Mapspectral(flux,[7,2])
@@ -60,7 +59,7 @@ def Indispectral(position,size=[5,2],cutinterval=[4020.,4028.]):
     '''
 
     #read the datacube
-    flux, wavelength ,wcs= Cubepre('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits')
+    flux, wavelength ,wcs= Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits')
     ra,dec,=CubeData.WCS(wcs)
 
     #generate the spectra
@@ -78,7 +77,7 @@ def Indiimg(wavelengthcut=[4020.,4028.]):
     '''
 
     #read the datacube
-    flux, wavelength ,wcs= Cubepre('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits')
+    flux, wavelength ,wcs= Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits')
     ra,dec=CubeData.WCS(wcs)
 
     #generate the 2D image
@@ -94,7 +93,7 @@ def Mapimg(internum,cutrange):
     '''
 
     #read the datacube
-    flux, wavelength ,wcs= Cubepre('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits')
+    flux, wavelength ,wcs= Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits')
     ra,dec=CubeData.WCS(wcs)
 
     #to match the interpolated image we should also interpolate the ra,dec because these are the x-axis and y-axis
@@ -145,7 +144,7 @@ def Sourcecheck(position,wavelengthcut,mark):
     plt.show()
 
 def AbsorpFinder(abrange,upperrange,lowerrange):
-    flux, wavelength, wcs = Cubepre('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits')
+    flux, wavelength, wcs = Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits')
     ra, dec = CubeData.WCS(wcs)
     map,ummap,lmmap,dec,ra=CubeData.Findabsorption(flux.value,wavelength.value,abrange,upperrange,lowerrange,dec.value,ra.value)
     umimg=ImagPlot.Twodplotimg(ummap,dec,ra)
@@ -165,7 +164,7 @@ def Indiimgreadout(waveinterval,name):
     twodimg,ra,dec=Indiimg(waveinterval)
 
     #read the header
-    header=CubeData.Readheader('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI','1441+4003_comb_ss_icubes.fits')
+    header=CubeData.Readheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits')
 
     #export the fits file
     CubeData.Imgreadout(twodimg,header,name)
@@ -186,31 +185,31 @@ def SingleContour(baseimgname,contouimgname,levels=None,col='red'):
     contouimg,contouheader,contouwcs=IO.Accessfits(contouimgname)
 
 
-    vscale=np.max(basimg)
+    vscale=600.
 
     #plot the image
     ax=plt.subplot()
     ax.contour(contouimg,levels=levels,linewidths=.5,color=col)
-    plt.imshow(basimg,cmap=cm.jet,vmax=vscale,vmin=-vscale)
+    plt.imshow(basimg[4:67,:],cmap='jet',vmax=vscale,vmin=-vscale)
     plt.axis('auto')
     plt.axis('off')
     cbar=plt.colorbar()
     cbar.set_label(r'$velocity (km/s) $')
 
 def contouroverlay():
-    hstimg,hstheader,hstwcs=IO.Accessfits('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammothicut.fits',0)
-    lymanimg,lyheader,lywcs=IO.Accessfits('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI/lyman.fits')
+    hstimg,hstheader,hstwcs=IO.Accessfits('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammothicut.fits',0)
+    lymanimg,lyheader,lywcs=IO.Accessfits('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/lyman.fits')
     lywcs=lywcs.dropaxis(2)
-    coaimg,coaheader,coawcs=IO.Accessfits("/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galA.fits")
+    coaimg,coaheader,coawcs=IO.Accessfits("/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galA.fits")
     coawcs=coawcs.dropaxis(2)
     cobimg, cobheader, cobwcs = IO.Accessfits(
-        "/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galB.fits")
+        "/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galB.fits")
     cobwcs = cobwcs.dropaxis(2)
     cocimg, cocheader, cocwcs = IO.Accessfits(
-        "/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galC.fits")
+        "/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galC.fits")
     cocwcs = cocwcs.dropaxis(2)
     codimg, codheader, codwcs = IO.Accessfits(
-        "/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galD.fits")
+        "/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galD.fits")
     codwcs = codwcs.dropaxis(2)
 
     norm=ImagPlot.Scaleimgconverter(hstimg)
@@ -232,7 +231,7 @@ def contouroverlay():
     plt.show()
     return None
 
-def velocitymap(z=2.308,waveinterval=[4000.,4050.],veloscale=500.):
+def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.,4040.]):
     '''
     calculate the flux-weighted velocity map and plot it
     :param z: redshift use to calculate the observed wavelength lambda0  (lambda-lambda0)*c/lambda0
@@ -240,22 +239,22 @@ def velocitymap(z=2.308,waveinterval=[4000.,4050.],veloscale=500.):
     :param veloscale: this is the up limit of the velocity map, velocity higher than this value will be replaced with it, -veloscale is the low limit
     :return: None
     '''
-    flux, wavelength, wcs = Cubepre('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits')#read the datacube, flux is cube
-    # header = CubeData.Readheader('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits')
+    flux, wavelength, wcs = Cubepre(path, filename)#read the datacube, flux is cube
+    header = CubeData.Readheader(path, filename)
 
     #convert ra,dec to angle distance from the mammoth-1 source
     ra, dec, = CubeData.WCS(wcs)
-    ra_dis,dec_dis=CubeData.Angle2distance(ra,dec)
+    ra_dis,dec_dis=CubeData.Angle2distance(ra,dec,[220.3519792,40.052625])
     ra_dis,dec_dis=ra_dis.value,dec_dis.value
 
     #cut the datacube along the axis of wavelength, only keep the cube within the waveinterval
     rangeflux,rangewavelength=CubeData.CubeCut(flux.value,wavelength.value,'manual',waveinterval)
 
     #calculate the emission line within seeing
-    rangeflux=CubeData.Cubeseeinglimit(rangeflux)
+    # rangeflux=CubeData.Cubeseeinglimit(rangeflux,[3.,1.])
 
     #convert wavelength to velocity
-    velocity=SpectralData.wavelength2velocity(rangewavelength,z,1215.673)
+    velocity=SpectralData.wavelength2velocity(rangewavelength,z,lamda0)
 
     #convert the flux image to velocity map
     velomap=CubeData.Cubeweightedmean(rangeflux,velocity)/1e3
@@ -263,15 +262,10 @@ def velocitymap(z=2.308,waveinterval=[4000.,4050.],veloscale=500.):
     #replace the velocity of pixels which have too large velocity
     # velomap[np.where(velomap>veloscale)]=veloscale
     # velomap[np.where(velomap<-veloscale)]=-veloscale
+    # velomap[np.where(abs(velomap) > veloscale)]=0.
     # CubeData.Imgreadout(velomap,header,'velocitymap.fits')
 
-    #plot the velocity map
-    ax,cbar=ImagPlot.Twodplotimg(velomap,dec_dis,ra_dis,vmax=veloscale,vmin=-veloscale)
-    cbar.set_label('$velocity \ km/s)$')
-    plt.xlabel(r'arcsec')
-    plt.ylabel(r'arcsec')
-    # img1=ImagPlot.Twodplotimg(subvelomap,subdec.value,subra.value,vmax=800.,vmin=-800.)
-    return None
+    return velomap,ra_dis,dec_dis
 
 def slitspectra(position):
     '''
@@ -281,7 +275,7 @@ def slitspectra(position):
     '''
 
     #read the datacube
-    flux, wavelength, wcs = Cubepre('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits')
+    flux, wavelength, wcs = Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits')
     ra, dec, = CubeData.WCS(wcs)
 
     #convert the ra,dec of mammoth-1 to image coordinate
@@ -307,7 +301,7 @@ def slitspectra(position):
         twodspectra=flux[wavelow:waveup,:,dec_init+i-1]#for each dec plot the 2D spectra
         print(dec_init+i-1)
         ax=fig.add_subplot(4,4,i)
-        pcolor(velocity/1e3,(ra.value-position[0])*3600.,twodspectra.T,cmap=cm.jet)
+        pcolor(velocity/1e3,(ra.value-position[0])*3600.,twodspectra.T,cmap='jet')
 
         # ax.imshow(twodspectra.T,cmap=cm.jet)
 
@@ -322,32 +316,44 @@ def slitspectra(position):
 
 
 
+def Run():
 
+    # Mapspectral(waverange=[4000.,4050.])
+    # Run_indispectral([25,18])
+    # Run_indiimg()
+    # Indispectral([220.3491,40.0525])
+    # Run_img([100,170])
+    # Run_img([0,100])
+    # Mapimg(internum=3,cutrange=8)
+    # Indiimg(mark='2')
+    # Sourcecheck([220.3522,40.0529],[4006.,4014.],mark='2')#source 1
+    # Sourcecheck([220.3539,40.0536],[4006.,4014.],mark='2')#source 2
+    # Sourcecheck([220.3491,40.0522],[4022.,4030.],mark='2')# source 3
+    # Sourcecheck([220.34855,40.0525],[4022.,4030.],mark='2')# source 4
+    # Sourcecheck([220.3489,40.0522],[4030.,4038.],mark='2')# source 5
+    # Sourcecheck([220.3493,40.0525],[4029.,4038.],mark='2')# source 6
+    # Sourcecheck([220.3519792,40.052625],[4000.,4030.],mark='2')
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL1',220.351083333+0.0025202666666643836)
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL2',40.0515833333+0.0017461500000024444)
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRPIX1',14.0)
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRPIX2',48.0)
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL1',220.351083333+0.0025202666666643836)
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL2',40.0515833333+0.0017461500000024444)
+    # Indiimgreadout([4021.,4025.],'lyman.fits')
+    # Indiimgreadout([3800.,4300.],'bw.fits')
+    # contouroverlay()
+    # Sourcecheck([220.3505375,40.05144444],[5460.,5500.],mark='2')
+    # Sourcecheck([220.3505375, 40.05144444], [5163., 5203.], mark='2')
+    # Sourcecheck([220.3528625, 40.05370556], [5100., 5550.], mark='2')
+    lymanvelomap,ra_dis,dec_dis=velocitymap('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',z=2.3076,lamda0=1215.673)
+    heiivelomap,_,_=velocitymap('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',z=2.3409,lamda0=1640,waveinterval=[5460.,5500.])
+    civvelomap,_,_=velocitymap('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',z=2.3463,lamda0=1549,waveinterval=[5163.,5203.])
+    ImagPlot.Twodplotimg([lymanvelomap,heiivelomap,civvelomap],dec_dis,ra_dis,subclo=2,subrow=2,vmin=-600,vmax=600,markpoint='mark',xlabel=r'arcsec',ylabel=r'arcsec'
+                         ,cbarlabel='$velocity \ km/s)$')
 
-# Mapspectral(waverange=[4000.,4050.])
-# Run_indispectral([25,18])
-# Run_indiimg()
-# Indispectral([220.3491,40.0525])
-# Run_img([100,170])
-# Run_img([0,100])
-# Mapimg(internum=3,cutrange=8)
-# Indiimg(mark='2')
-# Sourcecheck([220.3522,40.0529],[4006.,4014.],mark='2')#source 1
-# Sourcecheck([220.3539,40.0536],[4006.,4014.],mark='2')#source 2
-# Sourcecheck([220.3491,40.0522],[4022.,4030.],mark='2')# source 3
-# Sourcecheck([220.34855,40.0525],[4022.,4030.],mark='2')# source 4
-# Sourcecheck([220.3489,40.0522],[4030.,4038.],mark='2')# source 5
-# Sourcecheck([220.3493,40.0525],[4029.,4038.],mark='2')# source 6
-# Sourcecheck([220.3519792,40.052625],[4000.,4030.],mark='2')
-# CubeData.Editheader('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI','1441+4003_comb_ss_icubes.fits','CRVAL1',220.351083333+0.0025202666666643836)
-# CubeData.Editheader('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI','1441+4003_comb_ss_icubes.fits','CRVAL2',40.0515833333+0.0017461500000024444)
-# CubeData.Editheader('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI','1441+4003_comb_ss_icubes.fits','CRPIX1',14.0)
-# CubeData.Editheader('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI','1441+4003_comb_ss_icubes.fits','CRPIX2',48.0)
-# Indiimgreadout([4000.,4040.],'lyman.fits')
-# Indiimgreadout([3800.,4300.],'bw.fits')
-# contouroverlay()
-velocitymap()
-plt.show()
-# SingleContour('/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI/velocitymap.fits','/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI/lyman.fits',levels=[1.48181e-19,2.59317e-19,3.70453e-19,4.81588e-19,5.92724e-19],col='red')
-# plt.show()
-# slitspectra([220.35197916666667,40.052625])
+    # SingleContour('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/velocitymap.fits','/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/lyman.fits',levels=[-2.00258e-18,-4.03653e-19,1.19527e-18,2.7942e-18,4.39313e-18],col='red')
+    # plt.show()
+    # slitspectra([220.35197916666667,40.052625])
+    return None
+
+Run()
