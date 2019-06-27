@@ -1,5 +1,5 @@
 import numpy as np
-from scipy import signal, ndimage
+from scipy import signal, ndimage, interpolate
 
 
 def cellInterpolation(onedarray):
@@ -130,8 +130,8 @@ def Imgseeinglimit(img,size=[3,1]):
     img_shape=np.shape(img)
 
     #for each cell(within a seeing), use the mean intensity as the intensity of each pixel within the cell
-    for i in range(1,int(img_shape[0]/size[0])):
-        for j in range(1,int(img_shape[1]/size[1])):
+    for i in range(0,int(img_shape[0]/size[0])):
+        for j in range(0,int(img_shape[1]/size[1])):
             img[int((i-1)*size[0]):int(i*size[0]),int((j-1)*size[1]):int(j*size[1])]=np.mean(img[int((i-1)*size[0]):int(i*size[0]),int((j-1)*size[1]):int(j*size[1])])
 
     return img

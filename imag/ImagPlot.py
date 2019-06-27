@@ -17,38 +17,37 @@ def PlotMap(cubedata,emissionline=None):
     :param cubedata: 3D cube data
     :return: 2D image array
     '''
-
-    if emissionline=='lyman':
-        map=np.sum(cubedata[950:1010,:,:],axis=0)
-    elif emissionline=='CV':
-        map=np.sum(cubedata[1050:1330,:,:],axis=0)
-    else:
-        map = np.median(cubedata[:, :, :], axis=0)
+    map = np.sum(cubedata[:, :, :], axis=0)
 
 
     return map
 
-def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint=None,xlabel=r'x',ylabel=r'y',cbarlabel='cbar'):
+def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint='mark',xlabel=r'x',ylabel=r'y',cbarlabel='cbar',subtitle=None):
     fig,AX=plt.subplots(subrow,subclo,num=len(map))
     fig.text(0.5, 0.04, xlabel, ha='center')
     fig.text(0.04, 0.5, ylabel, va='center', rotation='vertical')
-    AX=AX.flatten()
     l_map=0
     if (subclo is 1) and (subrow is 1):
         AX=[AX]
         map=[map]
+    else:
+        AX = AX.flatten()
     for i in range(len(AX)):
+        AX[i].set(adjustable='box-forced', aspect='auto')
         if l_map<=len(map)-1:
-            img=AX[i].pcolor(y,x,map[l_map].T,cmap='jet',vmax=vmax,vmin=vmin)
+            img=AX[i].pcolor(x,y,map[l_map],cmap='jet',vmax=vmax,vmin=vmin)
+            AX[i].set_title(subtitle[l_map])
+            cbar = fig.colorbar(img, ax=AX[i])
+            cbar.set_label(cbarlabel)
         else:
             fig.delaxes(AX[i])
-        l_map+=1
         if markpoint is not None:
             AX[i].scatter(0.,0.,marker='*',color='magenta',s=100)
 
-    cax = fig.add_axes([0.92, 0.1, 0.02, 0.8])
-    cbar=fig.colorbar(img,cax)
-    cbar.set_label('$velocity \ km/s)$')
+        l_map += 1
+    # cax = fig.add_axes([0.92, 0.1, 0.02, 0.8])
+    # cbar=fig.colorbar(img,cax)
+    # cbar.set_label(cbarlabel)
     fig.tight_layout(rect=[0,0,.92,1])
     plt.show()
 
@@ -70,14 +69,13 @@ def Threedplotimg(twodmap,x,y):
 def Cutmap(datacube,cutaxis,waverange,xaxis,yaxis):
     cutflux, cutwavelength = CubeData.CubeCut(datacube, cutaxis, 'manual', waverange)
     twodimg = PlotMap(cutflux)
-    # twodimg ,xaxis,yaxis=Mapprepro(twodimg,xaxis,yaxis,internum=0)
     return twodimg,xaxis,yaxis
 
 def Scaleimgconverter(img):
     norm=ImageNormalize(img,interval=ZScaleInterval(),stretch=LinearStretch())
     return norm
 
-def Contourgenerator(handle=None,contourimg=None,wcs=None,levels=None,color=None):
+def Contourgenerator(handle=None,contourimg=None,wcs=None,levels=None,color=None,labels=None):
     contour=handle.contour(contourimg,transform=handle.get_transform(wcs),levels=levels,linewidths=.5,colors=color)
 
-    return handle,contour
+    return contour,handle
