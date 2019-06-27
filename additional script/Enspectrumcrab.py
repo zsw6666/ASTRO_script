@@ -15,8 +15,8 @@ def run():
     '''
     for each channel, we should use the flux at this channel to generate the psf and superpose the phtons at each channel then generate the observed spectrum
     '''
-    data=io('/Users/shiwuzhang/work&study/ASTRO/HW/高能天体物理/极光计划作业/02/','crab.txt')
-    data2=io('/Users/shiwuzhang/work&study/ASTRO/HW/高能天体物理/极光计划作业/01/','effective erea.txt')
+    data=io('/Users/shiwuzhang/W&S/ASTRO/HW/高能天体物理/极光计划作业/02/','crab.txt')
+    data2=io('/Users/shiwuzhang/W&S/ASTRO/HW/高能天体物理/极光计划作业/01/','effective erea.txt')
     energylist=[]
     effecarealist=[]
     for i in data2:
