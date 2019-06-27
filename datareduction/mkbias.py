@@ -29,4 +29,4 @@ def Biasfitsread(path,biastxt,ext):
     biasimgdic={x:np.array(biasimgdic[x]) for x in biasimgdic}
     return biasimgdic
 
-Biasfitsread('/Users/shiwuzhang/work&study/ASTRO','bias.txt',4)
+Biasfitsread('/Users/shiwuzhang/W&S/ASTRO','bias.txt',4)
