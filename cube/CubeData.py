@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 from spectral import SpectralData
 from spectral_cube import SpectralCube
 from imag import ImagPlot,ImgInterSmo
@@ -83,69 +84,6 @@ def FLux(cube=None, wavelength_axis=None,gain=None, exposuretime=None,emissionli
     flux=np.array(flux)*(u.erg/u.s)
 
     return flux, wavelength_cut
-def ContinuumEst(flux, ran=[1300, 1500]):
-    '''
-    estimate the continuum component of flux
-    :param flux: total flux
-    :param ran: wavelength range used to calculate continuum
-    :return: continuum component
-    '''
-
-    continuum = np.mean(flux[ran[0]:ran[1], :, :], axis=0)
-    continuum_std = np.std(flux[ran[0]:ran[1], :, :], axis=0)
-
-    return continuum, continuum_std
-def ContinuumSub(flux, flux_all):
-    '''
-    subtract continuum component
-    :param flux: total flux
-    :param flux_all: used to estimate continuum
-    :return: flux and its standard deviation
-    '''
-
-    flux_sub = np.zeros(np.shape(flux))
-    continuum, continuum_std = ContinuumEst(flux_all)
-    for i in range(np.shape(flux)[0]):
-        flux_sub[i, :, :] = flux[i, :, :]-continuum
-    flux_std = continuum_std
-    return flux, flux_std
-def BackgroundEstimation(image, region):
-    '''
-    estimate background value of the given image
-    :param image: wait to be analysis
-    :param region: which part we use to estimate background
-    :return: background and its standard deviation
-    '''
-
-    background = np.mean(
-        image[region[0, 0]:region[0, 1], region[1, 0]:region[1, 1]])
-    std_background = np.std(
-        image[region[0, 0]:region[0, 1], region[1, 0]:region[1, 1]])
-
-    return background, std_background
-def ImageBackgroundSubtraction(image, background):
-    '''
-    subtract background from the given image
-    :param image: wait to be subtracting
-    :param background: background value
-    :return: background-subrtacted image
-    '''
-
-    image = image-background
-    return image
-def CubeBackgroundSubtraction(cube):
-    '''
-    subtract background from the given cube
-    :param cube: cube waited to be subtract
-    :return: background-subtracted cube
-    '''
-    cube_bk = np.zeros(np.shape(cube))
-    for i in range(len(cube)):
-        background, background_std = BackgroundEstimation(
-            cube[i], np.array([[11, 20], [5, 9]]))
-        cube_bk[i] = ImageBackgroundSubtraction(cube[i], background)
-
-    return cube_bk
 
 def WCS(wcsmap):
     '''
@@ -159,6 +97,12 @@ def WCS(wcsmap):
     dec=np.mean(decmap,axis=0)
 
     return ra,dec
+
+def WCSextractor(path,fielname):
+    _, _, wcs, _=ReadCube(path,fielname)
+    ra,dec=WCS(wcs)
+    ra_dis,dec_dis=Angle2distance(ra, dec)
+    return ra_dis.value,dec_dis.value
 
 def Findposition(ramap,decmap,postion):
     '''
@@ -187,15 +131,11 @@ def MarkSource(twodmap,ramap,decmap,position):
     twodmap[ra_physical-round(5/2):ra_physical+round(5/2),dec_physical-round(3/2):dec_physical+round(3/2)]=0.5*np.min(twodmap)
     return twodmap
 
-def Findabsorption(fluxcube,cubewavelength,abrange,upperrange,lowerrange,xaxis,yaxis):
-    medianimg,axis1,axis2=ImagPlot.Cutmap(fluxcube,cubewavelength,abrange,xaxis,yaxis)
-    upperimg,axis1,axis2=ImagPlot.Cutmap(fluxcube,cubewavelength,upperrange,xaxis,yaxis)
-    lowerimg,xaxis,yaxis=ImagPlot.Cutmap(fluxcube,cubewavelength,lowerrange,xaxis,yaxis)
-    umimg=upperimg-medianimg
-    lmimg=lowerimg-medianimg
-    img=np.array([umimg,lmimg])
-    img=np.median(img,axis=0)
-    return img,umimg,lmimg,xaxis,yaxis
+def Continumsubtractor(cubecontinum,cubesub):
+
+    img_median=np.median(cubecontinum,axis=0)
+    cubesub=cubesub-img_median
+    return cubesub
 
 def Coordinateconvert(position):
     ra=Angle(str(position[0])+'d')
@@ -229,17 +169,14 @@ def Cubeweightedmean(cube,weight):
     #for each wavelength, smooth the image firstly
     cube=ImgInterSmo.CubeSmooth(cube,[1.5,0.428])
 
-    #sum the intensity for each pixel as the denominator
-    #find the pxiel with negative flux and repalce them with a very high value,
-    #for these kind of pixel, there's no emiision line, with this step when calculate
-    #the velocity, it will be a very small value(very close to zero) which will not influence
-    #the velocity map
+    #pixel's value shouldn't be negative,check the cube, if there's
+    #negative pixel, reset its value to zero
     totalmap = np.sum(cube, axis=0)
-    totalmap[np.where(totalmap<=0.)]=1e8
 
     #for image of each wavelength, multiply it with the weight(image is the flux array and weight is the velocity corresponding
     #to the wavelength )
     cube_vel=cube.copy()
+    cube_vel=CubeNoiseFilter(cube_vel,3,.2)
     for i in range(len(cube)):
         cube_vel[i,:,:]=cube_vel[i,:,:]*weight[i]
 
@@ -248,7 +185,7 @@ def Cubeweightedmean(cube,weight):
     # meanmap[np.where(meanmap==np.min(meanmap))]=0.
     return meanmap
 
-def Angle2distance(ra,dec):
+def Angle2distance(ra,dec,refpoint):
     '''
     convert ra,dec to angle distance to the center of the image
     :param ra: ra
@@ -257,7 +194,7 @@ def Angle2distance(ra,dec):
     '''
 
     ra,dec=ra.to(u.rad),dec.to(u.rad)
-    ra_dis,dec_dis=(ra-np.median(ra)).to(u.arcsec),(dec-np.mean(dec)).to(u.arcsec)
+    ra_dis,dec_dis=(ra-refpoint[0]*u.deg).to(u.arcsec),(dec-refpoint[1]*u.deg).to(u.arcsec)
 
     return ra_dis,dec_dis
 
@@ -278,7 +215,7 @@ def CubeNoiseFilter(cube,N=5,wn=.3):
             cube[:,i,j]=ImgInterSmo.NoiseFilter(cube[:,i,j],N,wn)
     return cube
 
-def Cubeseeinglimit(cube,size=[3.,1.]):
+def Cubeseeinglimit(cube,size=[6.,4.]):
     '''
     because the length and width of each pixel stand for different angle scale, for ra the angle scale
     for each pixel is 0.38 arcsec, so use three pixels along ra axis which corresponds to 1.14 arcsec
@@ -294,3 +231,19 @@ def Cubeseeinglimit(cube,size=[3.,1.]):
     for i in range(cube_shape[0]):
         cube[i,:,:]=ImgInterSmo.Imgseeinglimit(cube[i,:,:],size)
     return cube
+
+def Cubebadpixelremovor(cube,mean=0.,sigma=1.):
+    cube[np.where(cube<(mean+sigma))]=0.
+    return cube
+
+def Regionfilter(img1,img2,sigma_num=0.3):
+
+
+    img_return=img2.copy()
+    img_return[np.where(img1<sigma_num)]=np.nan
+    return img_return
+
+def BadvalueEstimator(cube):
+
+    img_sigma=np.std(cube)
+    return img_sigma
