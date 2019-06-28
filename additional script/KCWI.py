@@ -69,7 +69,7 @@ def Indispectral(position,size=[5,2],cutinterval=[4020.,4028.]):
     lowerline,upperline=SpectralData.WavelengthSelectPlot(onedspectral.value,cutinterval)
     return img,lowerline,upperline
 
-def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.]):
+def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.],internum=None):
     '''
     plot the 2D image for a selected wavelength interval
     :param wavelengthcut: wavelength interval
@@ -90,6 +90,11 @@ def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.]):
 
     #subtract the continuum component
     twodimg=twodimg-twodimg_conti
+
+    #interpolate and smooth
+    if internum is not None:
+        twodimg=ImgInterSmo.MapInterpolation(twodimg,internum)
+
     return twodimg,ra,dec
 
 def Mapimg(internum,cutrange):
@@ -248,7 +253,7 @@ def contouroverlay():
     plt.show()
     return None
 
-def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.,4050.]):
+def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.,4050.],internum=None):
     '''
     calculate the flux-weighted velocity map and plot it
     :param z: redshift use to calculate the observed wavelength lambda0  (lambda-lambda0)*c/lambda0
@@ -281,13 +286,14 @@ def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.
     bad_sigma=CubeData.BadvalueEstimator(badflux[:,20:30,4:8])
     rangeflux_badpix = CubeData.Cubebadpixelremovor(rangeflux_subtracted, sigma=bad_sigma)
 
-
-    #interpolate the cube and smooth it
-    velocitycube=ImgInterSmo.CubeInterpolation(rangeflux_badpix,ra_dis,dec_dis,)
+    #interpolate and smooth cube
+    if internum is not None:
+        cube_velocity,ra_dis,dec_dis=ImgInterSmo.CubeInterpolation(rangeflux_badpix,ra_dis,dec_dis,internum)
+        cube_velocity=ImgInterSmo.CubeSmooth(cube_velocity,[1.5,0.428])
 
 
     # convert the flux image to velocity map
-    velomap=CubeData.Cubeweightedmean(rangeflux_badpix,velocity)/1e3
+    velomap=CubeData.Cubeweightedmean(cube_velocity,velocity)/1e3
 
 
 
@@ -301,10 +307,10 @@ def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.
 
 
 
-def velocitymap_filter(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4000.,4050.],sigma_num=0.25):
+def velocitymap_filter(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4000.,4050.],sigma_num=0.25,internum=None):
 
-    velomap,ra_dis,dec_dis=velocitymap(path,filename,z,lamda0,waveinterval)
-    fluxmap,_,_=Indiimg(path,filename,waveinterval)
+    velomap,ra_dis,dec_dis=velocitymap(path,filename,z,lamda0,waveinterval,internum)
+    fluxmap,_,_=Indiimg(path,filename,waveinterval,internum)
     velomap_filtered=CubeData.Regionfilter(fluxmap,velomap,sigma_num)
     return velomap_filtered,ra_dis,dec_dis
 
@@ -386,15 +392,17 @@ def Run():
     # Sourcecheck([220.3505375, 40.05144444], [5163., 5203.], mark='2')
     # Sourcecheck([220.3528625, 40.05370556], [5100., 5550.], mark='2')
     lymanvelomap, ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',
-                                                     z=2.310,lamda0=1215.673,sigma_num=7.e-18)
-    lymanimg,_,_=Indiimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',[4000.,4050.])
+                                                     z=2.310,lamda0=1215.673,sigma_num=7.e-18,internum=[1,4])
+    # plt.imshow(lymanvelomap,cmap='jet')
+    # plt.show()
+    lymanimg,_,_=Indiimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',[4000.,4050.],[1,4])
     lymanvelomap[0:10, :], lymanvelomap[60:, :] = np.nan, np.nan
     lymanvelomap[:, 0:8], lymanvelomap[:, 20:] = np.nan, np.nan
     lymanimg[0:2, :], lymanimg[67:, :] = np.nan, np.nan
 
     heiivelomap, _, _=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
                                          z=2.340,lamda0=1640,waveinterval=[5464.,5493.],sigma_num=2e-18)
-    heiiimg,_,_=Indiimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',[5464.,5493.])
+    heiiimg,_,_=Indiimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',[5464.,5493.],[1,4])
     heiivelomap[0:5, :], heiivelomap[60:, :] = np.nan, np.nan
     heiivelomap[:, 0:8], heiivelomap[:, 21:] = np.nan, np.nan
     heiiimg[0:2, :], heiiimg[67:, :] = np.nan, np.nan
@@ -402,7 +410,7 @@ def Run():
     #
     civvelomap, _, _=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
                                         z=2.34385,lamda0=1549,waveinterval=[5160.,5200.],sigma_num=3.2e-18)
-    civimg,_,_=Indiimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',[5160.,5200.])
+    civimg,_,_=Indiimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',[5160.,5200.],[1,4])
     civvelomap[0:5, :], civvelomap[60:, :] = np.nan, np.nan
     civvelomap[:, 0:8], civvelomap[:, 21:] = np.nan, np.nan
     civimg[0:2, :], civimg[67:, :] = np.nan, np.nan
