@@ -166,11 +166,7 @@ def Cubeweightedmean(cube,weight):
     :return: flux-weighted velocity map
     '''
 
-    #for each wavelength, smooth the image firstly
-    cube=ImgInterSmo.CubeSmooth(cube,[1.5,0.428])
-
-    #pixel's value shouldn't be negative,check the cube, if there's
-    #negative pixel, reset its value to zero
+    #calculate the denominator of this weight mean
     totalmap = np.sum(cube, axis=0)
 
     #for image of each wavelength, multiply it with the weight(image is the flux array and weight is the velocity corresponding
