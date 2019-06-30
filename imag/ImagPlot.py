@@ -22,10 +22,11 @@ def PlotMap(cubedata,emissionline=None):
 
     return map
 
-def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint='mark',xlabel=r'x',ylabel=r'y',cbarlabel='cbar',subtitle=None):
+def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint='mark',xlabel=r'x',ylabel=r'y',cbarlabel='cbar',subtitle=None,title=None):
     fig,AX=plt.subplots(subrow,subclo,num=len(map))
-    fig.text(0.5, 0.04, xlabel, ha='center')
-    fig.text(0.04, 0.5, ylabel, va='center', rotation='vertical')
+    fig.text(0.5, 0.3, xlabel, ha='center')
+    fig.text(0.08, 0.6, ylabel, va='center', rotation='vertical')
+    fig.suptitle(title)
     l_map=0
     if (subclo is 1) and (subrow is 1):
         AX=[AX]
@@ -33,12 +34,12 @@ def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint='mark',x
     else:
         AX = AX.flatten()
     for i in range(len(AX)):
-        AX[i].set(adjustable='box-forced', aspect='auto')
+        AX[i].set(adjustable='box-forced', aspect='equal')
         if l_map<=len(map)-1:
             img=AX[i].pcolor(x,y,map[l_map],cmap='jet',vmax=vmax,vmin=vmin)
             AX[i].set_title(subtitle[l_map])
-            cbar = fig.colorbar(img, ax=AX[i])
-            cbar.set_label(cbarlabel)
+            cbar = fig.colorbar(img, ax=AX[i],orientation="horizontal", pad=0.2)
+            cbar.set_label(cbarlabel[l_map])
         else:
             fig.delaxes(AX[i])
         if markpoint is not None:
@@ -48,7 +49,7 @@ def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint='mark',x
     # cax = fig.add_axes([0.92, 0.1, 0.02, 0.8])
     # cbar=fig.colorbar(img,cax)
     # cbar.set_label(cbarlabel)
-    fig.tight_layout(rect=[0,0,.92,1])
+    # fig.tight_layout()
     plt.show()
 
 
@@ -56,7 +57,7 @@ def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint='mark',x
 
 def Mapprepro(twodmap,x,y,internum):
     twodmap = ImgInterSmo.InSmimg(twodmap, internum, [3., 3.])
-    x, y = ImgInterSmo.Onedinterpolation(x, internum)[1:-1], ImgInterSmo.Onedinterpolation(y, internum)[1:-1]
+    x, y = ImgInterSmo.Arrayinterpolation(x, internum)[1:-1], ImgInterSmo.Arrayinterpolation(y, internum)[1:-1]
     return twodmap,x,y
 
 def Threedplotimg(twodmap,x,y):
