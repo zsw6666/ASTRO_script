@@ -1,70 +1,26 @@
 import numpy as np
-from scipy import signal, ndimage, interpolate
+from scipy import signal, ndimage
 
 
-def cellInterpolation(onedarray):
-    former=onedarray[:-1]
-    latter=onedarray[1:]
-    intercell=(former+latter)/2.
-    newarray=np.zeros((1,np.size(intercell)+np.size(onedarray)))[0]
-    for i in range(len(newarray)):
-        if i%2==0:
-            newarray[i]=onedarray[int(i/2)]
-        else:
-            newarray[i]=intercell[int((i-1)/2)]
-    return newarray
-
-def Onedinterpolation(onedarray,internum):
-    for i in range(internum):
-        onedarray=cellInterpolation(onedarray)
-    return onedarray
-
-def AxiesInterpolation(map, axies=0):
+def Arrayinterpolation(array, internum):
     '''
-    interpolate value to the map
-    :param map: original image
-    :param axies: axies along which interpolated
-    :return: image interpolated along chosen axis
+    interpolation the nD numpy array
+    :param array: numpy array waited for interpolation
+    :param internum: control the interpolation
+    :return: interpolated array
     '''
+    array_intered=ndimage.zoom(array,internum,order=3)
+    return array_intered
 
-    # choose which axis to interpolate along
-    if axies == 1:
-        map = map.T
-
-    # create new array waited values
-    interpolated_map = np.zeros((2*np.shape(map)[0]-1, np.shape(map)[1]))
-    # apply the mean value of the neighbor pixel
-    inter_axies = (map[:-1, :]+map[1:, :])/2.
-
-    # put the original image and interpolated image to the new image
-    for axiesi in range(np.shape(interpolated_map)[0]):
-        if axiesi % 2 == 0:
-            interpolated_map[axiesi, :] = map[int(axiesi/2), :]
-        else:
-            interpolated_map[axiesi, :] = inter_axies[int((axiesi-1)/2), :]
-
-    # transverse the image
-    if axies == 1:
-        final_map = interpolated_map.T
-    else:
-        final_map = interpolated_map
-
-    return final_map
-
-def MapInterpolation(map, internum):
+def ImgSmoothor(img,sigma):
     '''
-    interpolate value to the map
-    :param map: original map
-    :return: interpolated map
+    smooth the 2D image
+    :param img: 2D numpy array
+    :param sigma: parameter controling the smooth
+    :return: smoothed image
     '''
-
-    # interploate original map along x axis and y axis
-    for i in range(internum):
-        map = AxiesInterpolation(map)
-        map = AxiesInterpolation(map, axies=1)
-    map = map[::-1]
-
-    return map
+    img_smooth=ndimage.gaussian_filter(img,sigma)
+    return img_smooth
 
 def CubeInterpolation(cube, ra, dec, internum):
     '''
@@ -73,14 +29,21 @@ def CubeInterpolation(cube, ra, dec, internum):
     :param internum: number of interpolation
     :return: interpolated cube
     '''
-    shape0 = np.shape(cube)
-    shape1 = np.shape(MapInterpolation(cube[0], internum))
-    cube_inter = np.zeros((shape0[0], shape1[0], shape1[1]))
-    for i in range(len(cube)):
-        cube_inter[i] = MapInterpolation(cube[i], internum)
-    ra_inter = MapInterpolation(ra, internum)
-    dec_inter = MapInterpolation(dec, internum)
-    return cube_inter, ra_inter, dec_inter
+    # create the new array used to carry the new interpolated array
+    cube_shape=np.shape(cube)
+    inter_shape=(cube_shape[0],cube_shape[1]*internum[0],cube_shape[2]*internum[1])
+    cube_inter=np.zeros(inter_shape)
+
+    # interpolate the coordinate
+    ra_inter=Arrayinterpolation(ra,internum[0])
+    dec_inter=Arrayinterpolation(dec,internum[1])
+
+
+    # for each slice in cube, interpolate the image
+    for i in range(np.shape(cube)[0]):
+        cube_inter[i,:,:]=Arrayinterpolation(cube[i,:,:],internum)
+
+    return cube_inter,ra_inter,dec_inter
 
 def CubeSmooth(cube,sigma=(3.,)):
     '''
@@ -88,8 +51,10 @@ def CubeSmooth(cube,sigma=(3.,)):
     :param cube: cube waiting smoothing
     :return: smoothed cube
     '''
+
+    # for each slice in cube, smooth the image
     for i in range(len(cube)):
-        cube[i,2:67,:]=ndimage.gaussian_filter(cube[i,2:67,:],sigma)
+        cube[i,:,:]=ImgSmoothor(cube[i,:,:],sigma)
     return cube
 
 def InSmimg(map,internum,sigma):
@@ -101,7 +66,7 @@ def InSmimg(map,internum,sigma):
     :return: interpolated and smoothed image
     '''
 
-    map=MapInterpolation(map,internum)
+    map=Arrayinterpolation(map,internum)
     map=ndimage.gaussian_filter(map,sigma)
     return map
 
@@ -135,3 +100,14 @@ def Imgseeinglimit(img,size=[3,1]):
             img[int((i-1)*size[0]):int(i*size[0]),int((j-1)*size[1]):int(j*size[1])]=np.mean(img[int((i-1)*size[0]):int(i*size[0]),int((j-1)*size[1]):int(j*size[1])])
 
     return img
+
+# if __name__=='__main__':
+#     import matplotlib.pyplot as plt
+#     x = np.linspace(0, 10*np.pi, 20)
+#     y = np.cos(x)
+#     yinter=Arrayinterpolation(y,1000)
+#     xinter=np.linspace(0,10*np.pi,1000)
+#     plt.plot(xinter,yinter)
+#     plt.plot(x,y)
+#     plt.show()
+
