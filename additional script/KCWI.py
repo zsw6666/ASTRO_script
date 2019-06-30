@@ -92,8 +92,9 @@ def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.],internum=None):
     twodimg=twodimg-twodimg_conti
 
     #interpolate and smooth
+    twodimg = ImgInterSmo.ImgSmoothor(twodimg, [1.5, 0.428])
     if internum is not None:
-        twodimg=ImgInterSmo.MapInterpolation(twodimg,internum)
+        twodimg=ImgInterSmo.Arrayinterpolation(twodimg,internum)
 
     return twodimg,ra,dec
 
@@ -110,7 +111,7 @@ def Mapimg(internum,cutrange):
     ra,dec=CubeData.WCS(wcs)
 
     #to match the interpolated image we should also interpolate the ra,dec because these are the x-axis and y-axis
-    ra,dec=ImgInterSmo.Onedinterpolation(ra.value,internum)[1:-1],ImgInterSmo.Onedinterpolation(dec.value,internum)[1:-1]
+    ra,dec=ImgInterSmo.Arrayinterpolation(ra.value,internum)[1:-1],ImgInterSmo.Arrayinterpolation(dec.value,internum)[1:-1]
 
     #cut the datacube for each interval
     for i in range(int(1600/cutrange)):
@@ -232,9 +233,11 @@ def contouroverlay():
 
     norm=ImagPlot.Scaleimgconverter(hstimg)
     ax=plt.subplot(projection=hstwcs)
-    contourlyman,ax= ImagPlot.Contourgenerator(ax, lymanimg, lywcs,[2.2e-17,5.1667e-17,8.1334e-17,1.11001e-16],'red')#[1.4e-19, 1.8271e-19, 2.25421e-19, 2.68131e-19, 3.10841e-19, 3.53552e-19,3.96262e-19]
-    contourheii,ax = ImagPlot.Contourgenerator(ax, heiiimg, heiiwcs,[5e-18,1.23278e-17,1.96556e-17,2.69833e-17,3.43111e-17],'cyan')
-    contourciv,ax = ImagPlot.Contourgenerator(ax, civimg, civwcs, [7e-18,1.0025e-17,1.305e-17,1.6075e-17,1.91e-17], 'lime')
+
+    # extract the contours and overlay them on the base image
+    contourlyman,ax= ImagPlot.Contourgenerator(ax, lymanimg, lywcs,[1.e-17,4.1667e-17,7.1334e-17,9.11001e-17],'red')#
+    contourheii,ax = ImagPlot.Contourgenerator(ax, heiiimg, heiiwcs,[4.e-18,9.23278e-18,1.1e-17,2.e-17,3.e-17],'cyan')#
+    contourciv,ax = ImagPlot.Contourgenerator(ax, civimg, civwcs,[4.e-18,1.0025e-17,1.305e-17,1.6075e-17,1.91e-17], 'lime')#
     contourco1,ax=ImagPlot.Contourgenerator(ax,coaimg[0],coawcs,[0.0123874,0.0155811,
                                                       0.0187747,0.0219684,0.0251621],'white')#[0.006,0.00919368,0.0123874,0.0155811,0.0187747,0.0219684,0.0251621]
     contourco2,ax = ImagPlot.Contourgenerator(ax, cobimg[0], cobwcs,
@@ -245,8 +248,10 @@ def contouroverlay():
                                    [0.007,0.0100019,0.0130039], 'white')
 
     ax.imshow(hstimg,norm=norm,cmap='gray')
+    # plt.tight_layout(rect=[0,0,.92,1])
+    plt.subplots_adjust(left=0.05, right=0.99, top=0.95, bottom=0.1)
     lines=[contourlyman.collections[0],contourheii.collections[0],contourciv.collections[0],contourco1.collections[0]]
-    labels=['$Lyman\alpha$','$HeII$','$CIV$','CO']
+    labels=['$Lyman\alpha$','$HeII$','$CIV$','$CO(1-0)$']
     plt.legend(lines,labels)
     plt.xlabel(r'$Right Ascension$')
     plt.ylabel(r'$declination$')
@@ -275,8 +280,6 @@ def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.
     badflux,_=CubeData.CubeCut(flux.value,wavelength.value,'manual',waveinterval-100)
     continumflux,_=CubeData.CubeCut(flux.value,wavelength.value,'manual',waveinterval-(waveinterval[1]-waveinterval[0]))
 
-    #calculate the emission line within seeing
-    # rangeflux=CubeData.Cubeseeinglimit(rangeflux,[3.,1.])
 
     #convert wavelength to velocity
     velocity=SpectralData.wavelength2velocity(rangewavelength,z,lamda0)
@@ -286,10 +289,12 @@ def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.
     bad_sigma=CubeData.BadvalueEstimator(badflux[:,20:30,4:8])
     rangeflux_badpix = CubeData.Cubebadpixelremovor(rangeflux_subtracted, sigma=bad_sigma)
 
-    #interpolate and smooth cube
+
+    # calculate the emission line within seeing
+    cube_velocity = ImgInterSmo.CubeSmooth(rangeflux_badpix, [1.5, 0.428])
+    # interpolate and smooth cube
     if internum is not None:
-        cube_velocity,ra_dis,dec_dis=ImgInterSmo.CubeInterpolation(rangeflux_badpix,ra_dis,dec_dis,internum)
-        cube_velocity=ImgInterSmo.CubeSmooth(cube_velocity,[1.5,0.428])
+        cube_velocity,ra_dis,dec_dis=ImgInterSmo.CubeInterpolation(cube_velocity,ra_dis,dec_dis,internum)
 
 
     # convert the flux image to velocity map
@@ -306,13 +311,33 @@ def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.
     return velomap,ra_dis,dec_dis
 
 
-
 def velocitymap_filter(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4000.,4050.],sigma_num=0.25,internum=None):
+    '''
+    show the velocity map which is only within the emission region
+    :param path: path of which files used
+    :param filename: data cube used to calculate the velocity map, it's transfered to function velocitymap
+    :param z: redshift corresponding to the emission region
+    :param lamda0: intrinsic wavelength of this emission line
+    :param waveinterval: wavelength range within which calculated the velocity map, it's transfered to function velocitymap
+    :param sigma_num: used  to keep pxiels whose value is beyond this parameter
+    :param internum: used to control the interpolation, it's transfered to function velocitymap
+    :return: velocity map only emission region kept
+    '''
 
+    # produce the velocity map
     velomap,ra_dis,dec_dis=velocitymap(path,filename,z,lamda0,waveinterval,internum)
+    # produce the flux map used to determine which keep should be kept
     fluxmap,_,_=Indiimg(path,filename,waveinterval,internum)
+
+    # do the filter, only keep the pixels we need
     velomap_filtered=CubeData.Regionfilter(fluxmap,velomap,sigma_num)
-    return velomap_filtered,ra_dis,dec_dis
+    velo_shape=np.shape(velomap_filtered)
+    velomap_filtered[:,:int(0.3*velo_shape[0])]=np.nan
+    velomap_filtered[:,-1-int(0.1*velo_shape[0]):]=np.nan
+    velomap_filtered[:int(0.1*velo_shape[0]),:]=np.nan
+    velomap_filtered[-1-int(0.1 * velo_shape[0]):, :] = np.nan
+
+    return velomap_filtered,fluxmap,ra_dis,dec_dis
 
 
 def slitspectra(position):
@@ -378,12 +403,10 @@ def Run():
     # Sourcecheck([220.3489,40.0522],[4030.,4038.],mark='2')# source 5
     # Sourcecheck([220.3493,40.0525],[4029.,4038.],mark='2')# source 6
     # Sourcecheck([220.3519792,40.052625],[4000.,4030.],mark='2')
-    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL1',220.351083333+0.0025202666666643836)
-    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL2',40.0515833333+0.0017461500000024444)
-    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRPIX1',14.0)
-    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRPIX2',48.0)
-    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL1',220.351083333+0.0025202666666643836)
-    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL2',40.0515833333+0.0017461500000024444)
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_ss_icubes.fits','CRVAL1',220.351083333+0.0015231999999798518)
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_ss_icubes.fits','CRVAL2',40.0515833333+0.0006535899999988715)
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL1',220.351083333+0.0015231999999798518)
+    # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_psfs_icubes.fits','CRVAL2',40.0515833333+0.0006535899999988715)
     # Indiimgreadout(path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',filename='1441+4003_comb_ss_icubes.fits',waveinterval=[4010.,4050.],name='lyman.fits')
     # Indiimgreadout(path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',filename='1441+4003_comb_psfs_icubes.fits',waveinterval=[5464.,5493.],name='heii.fits')
     # Indiimgreadout(path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',filename='1441+4003_comb_psfs_icubes.fits',waveinterval=[5160.,5200.],name='civ.fits')
@@ -391,36 +414,28 @@ def Run():
     # Sourcecheck([220.3505375,40.05144444],[5460.,5500.],mark='2')
     # Sourcecheck([220.3505375, 40.05144444], [5163., 5203.], mark='2')
     # Sourcecheck([220.3528625, 40.05370556], [5100., 5550.], mark='2')
-    lymanvelomap, ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',
-                                                     z=2.310,lamda0=1215.673,sigma_num=7.e-18,internum=[1,4])
-    # plt.imshow(lymanvelomap,cmap='jet')
-    # plt.show()
-    lymanimg,_,_=Indiimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',[4000.,4050.],[1,4])
-    lymanvelomap[0:10, :], lymanvelomap[60:, :] = np.nan, np.nan
-    lymanvelomap[:, 0:8], lymanvelomap[:, 20:] = np.nan, np.nan
-    lymanimg[0:2, :], lymanimg[67:, :] = np.nan, np.nan
+    lymanvelomap, lymanimg,ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',
+                                                     z=2.311,lamda0=1215.673,sigma_num=9.e-18,internum=[2,8])
 
-    heiivelomap, _, _=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
-                                         z=2.340,lamda0=1640,waveinterval=[5464.,5493.],sigma_num=2e-18)
-    heiiimg,_,_=Indiimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',[5464.,5493.],[1,4])
-    heiivelomap[0:5, :], heiivelomap[60:, :] = np.nan, np.nan
-    heiivelomap[:, 0:8], heiivelomap[:, 21:] = np.nan, np.nan
-    heiiimg[0:2, :], heiiimg[67:, :] = np.nan, np.nan
+
+    ImagPlot.Twodplotimg([lymanvelomap,lymanimg],dec_dis,ra_dis,subclo=2,subrow=1,xlabel=r'arcsec',
+                         ylabel=r'arcsec',cbarlabel=[r'$velocity(km/s)$','$flux(erg/s/cm^{2})$'],
+                         subtitle=['velocity map','flux map'],title='Lyman-alpha')
+
+    # heiivelomap,heiiimg, ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
+    #                                      z=2.340,lamda0=1640,waveinterval=[5464.,5493.],sigma_num=2e-18,internum=[2,8])
+    # ImagPlot.Twodplotimg([heiivelomap, heiiimg], dec_dis, ra_dis, subclo=2, subrow=1, xlabel=r'arcsec',
+    #                      ylabel=r'arcsec', cbarlabel=[r'$velocity(km/s)$','$flux(erg/s/cm^{2})$'],
+    #                      subtitle=['velocity map', 'flux map'],title='HeII')
     #
     #
-    civvelomap, _, _=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
-                                        z=2.34385,lamda0=1549,waveinterval=[5160.,5200.],sigma_num=3.2e-18)
-    civimg,_,_=Indiimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',[5160.,5200.],[1,4])
-    civvelomap[0:5, :], civvelomap[60:, :] = np.nan, np.nan
-    civvelomap[:, 0:8], civvelomap[:, 21:] = np.nan, np.nan
-    civimg[0:2, :], civimg[67:, :] = np.nan, np.nan
+    # civvelomap, civimg,ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
+    #                                     z=2.34385,lamda0=1549,waveinterval=[5160.,5200.],sigma_num=3.2e-18,internum=[2,8])
+    # ImagPlot.Twodplotimg([civvelomap, civimg], dec_dis, ra_dis, subclo=2, subrow=1, xlabel=r'arcsec',
+    #                      ylabel=r'arcsec', cbarlabel=[r'$velocity(km/s)$','$flux(erg/s/cm^{2})$'],
+    #                      subtitle=['velocity map', 'flux map'],title='CIV')
 
-    ImagPlot.Twodplotimg([lymanvelomap,heiivelomap,civvelomap],dec_dis,ra_dis,subclo=2,subrow=2,xlabel=r'arcsec',
-                         ylabel=r'arcsec',cbarlabel='$velocity(km/s))$',
-                         subtitle=['$Lyman \alpha$','$HeII$','$CIV$'])
-    ImagPlot.Twodplotimg([lymanimg, heiiimg, civimg], dec_dis, ra_dis, subclo=2, subrow=2, xlabel=r'arcsec',
-                         ylabel=r'arcsec', cbarlabel='$flux(erg/s/cm^{2})$',
-                         subtitle=['$Lyman \alpha$', '$HeII$', '$CIV$'])
+
     return None
 
 Run()
