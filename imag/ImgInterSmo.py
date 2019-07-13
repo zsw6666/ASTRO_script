@@ -9,7 +9,7 @@ def Arrayinterpolation(array, internum):
     :param internum: control the interpolation
     :return: interpolated array
     '''
-    array_intered=ndimage.zoom(array,internum,order=3)
+    array_intered=ndimage.zoom(array,internum,order=1)
     return array_intered
 
 def ImgSmoothor(img,sigma):

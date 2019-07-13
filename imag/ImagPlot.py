@@ -22,7 +22,7 @@ def PlotMap(cubedata,emissionline=None):
 
     return map
 
-def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint='mark',xlabel=r'x',ylabel=r'y',cbarlabel='cbar',subtitle=None,title=None):
+def Twodplotimg(map,x,y,contourmap=None,subrow=1,subclo=1,vmin=None,vmax=None,contourlevel=None,markpoint='mark',xlabel=r'x',ylabel=r'y',cbarlabel='cbar',subtitle=None,title=None):
     fig,AX=plt.subplots(subrow,subclo,num=len(map))
     fig.text(0.5, 0.3, xlabel, ha='center')
     fig.text(0.08, 0.6, ylabel, va='center', rotation='vertical')
@@ -36,7 +36,7 @@ def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint='mark',x
     for i in range(len(AX)):
         AX[i].set(adjustable='box-forced', aspect='equal')
         if l_map<=len(map)-1:
-            img=AX[i].pcolor(x,y,map[l_map],cmap='jet',vmax=vmax,vmin=vmin)
+            img=AX[i].pcolor(x,y,map[l_map],cmap='gist_ncar',vmax=vmax,vmin=vmin)
             AX[i].set_title(subtitle[l_map])
             cbar = fig.colorbar(img, ax=AX[i],orientation="horizontal", pad=0.2)
             cbar.set_label(cbarlabel[l_map])
@@ -44,6 +44,9 @@ def Twodplotimg(map,x,y,subrow=1,subclo=1,vmin=None,vmax=None,markpoint='mark',x
             fig.delaxes(AX[i])
         if markpoint is not None:
             AX[i].scatter(0.,0.,marker='*',color='magenta',s=100)
+        if contourmap is not None:
+            con=AX[i].contour(x,y,contourmap,level=contourlevel,colors='black')
+            AX[i].clabel(con, inline=1, fontsize=10)
 
         l_map += 1
     # cax = fig.add_axes([0.92, 0.1, 0.02, 0.8])
