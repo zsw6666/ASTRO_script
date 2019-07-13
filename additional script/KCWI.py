@@ -1,4 +1,4 @@
-from cube import CubeData
+from cube import CubeData, Cubegenerator
 from spectral import SpectralData
 from imag import ImagPlot,ImgInterSmo
 from datareduction import IO
@@ -95,6 +95,7 @@ def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.],internum=None):
     twodimg = ImgInterSmo.ImgSmoothor(twodimg, [1.5, 0.428])
     if internum is not None:
         twodimg=ImgInterSmo.Arrayinterpolation(twodimg,internum)
+
 
     return twodimg,ra,dec
 
@@ -258,7 +259,7 @@ def contouroverlay():
     plt.show()
     return None
 
-def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.,4050.],internum=None):
+def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.,4050.],internum=None,mask_sig=2.):
     '''
     calculate the flux-weighted velocity map and plot it
     :param z: redshift use to calculate the observed wavelength lambda0  (lambda-lambda0)*c/lambda0
@@ -291,27 +292,32 @@ def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.
 
 
     # calculate the emission line within seeing
-    cube_velocity = ImgInterSmo.CubeSmooth(rangeflux_badpix, [1.5, 0.428])
+    cube_velocity = ImgInterSmo.CubeSmooth(rangeflux_badpix, [3., 0.9])#
+
+
     # interpolate and smooth cube
     if internum is not None:
         cube_velocity,ra_dis,dec_dis=ImgInterSmo.CubeInterpolation(cube_velocity,ra_dis,dec_dis,internum)
 
+    # to get the optimal flux-weighted velocity map, we should first generate the mask
+    mask_cube = CubeData.Maskgenerator(cube_velocity, mask_sig)# lyman 1.7, heii 2.5
 
     # convert the flux image to velocity map
-    velomap=CubeData.Cubeweightedmean(cube_velocity,velocity)/1e3
+    velomap,fluxmap=CubeData.Cubeweightedmean(cube_velocity,velocity,mask_cube)
+    velomap=velomap/1e3
 
 
 
     #replace the velocity of pixels which have too large velocity
-    # velomap[np.where(velomap>veloscale)]=veloscale
-    # velomap[np.where(velomap<-veloscale)]=-veloscale
-    # velomap[np.where(abs(velomap) > veloscale)]=0.
+    # velomap[np.where(abs(velomap)>1000.)]=np.nan
+    velomap[np.where(velomap<-1000.)]=-1000.
+    velomap[np.where(velomap > 1000.)] = 1000.
     # CubeData.Imgreadout(velomap,header,'velocitymap.fits')
 
-    return velomap,ra_dis,dec_dis
+    return velomap,fluxmap,ra_dis,dec_dis
 
 
-def velocitymap_filter(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4000.,4050.],sigma_num=0.25,internum=None):
+def velocitymap_filter(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[3990.,4060.],sigma_num=0.25,internum=None,mask_sig=2.):
     '''
     show the velocity map which is only within the emission region
     :param path: path of which files used
@@ -325,17 +331,45 @@ def velocitymap_filter(path=None,filename=None,z=2.3093,lamda0=None,waveinterval
     '''
 
     # produce the velocity map
-    velomap,ra_dis,dec_dis=velocitymap(path,filename,z,lamda0,waveinterval,internum)
-    # produce the flux map used to determine which keep should be kept
-    fluxmap,_,_=Indiimg(path,filename,waveinterval,internum)
+    velomap,fluxmap,ra_dis,dec_dis=velocitymap(path,filename,z,lamda0,waveinterval,internum,mask_sig)
+
+
+    ##
 
     # do the filter, only keep the pixels we need
     velomap_filtered=CubeData.Regionfilter(fluxmap,velomap,sigma_num)
     velo_shape=np.shape(velomap_filtered)
-    velomap_filtered[:,:int(0.3*velo_shape[0])]=np.nan
-    velomap_filtered[:,-1-int(0.1*velo_shape[0]):]=np.nan
-    velomap_filtered[:int(0.1*velo_shape[0]),:]=np.nan
-    velomap_filtered[-1-int(0.1 * velo_shape[0]):, :] = np.nan
+
+    #for lyman-alpha
+    # velomap_filtered[:,:int(0.4*velo_shape[0])]=np.nan
+    # velomap_filtered[:,-1-int(0.2*velo_shape[0]):]=np.nan
+    # velomap_filtered[:int(0.1*velo_shape[0]),:]=np.nan
+    # velomap_filtered[-1-int(0.2 * velo_shape[0]):, :] = np.nan
+    fluxmap[:, :int(0.1 * velo_shape[0])] = np.nan
+    fluxmap[:, -1 - int(0.1 * velo_shape[0]):] = np.nan
+    fluxmap[:int(0.01 * velo_shape[0]), :] = np.nan
+    fluxmap[-1 - int(0.1 * velo_shape[0]):, :] = np.nan
+
+    #for heii
+    # velomap_filtered[:, :int(0.7 * velo_shape[0])] = np.nan
+    # velomap_filtered[:, -1 - int(0.25 * velo_shape[0]):] = np.nan
+    # velomap_filtered[:int(0.3 * velo_shape[0]), :] = np.nan
+    # velomap_filtered[-1 - int(0.25 * velo_shape[0]):, :] = np.nan
+    # fluxmap[:, :int(0.7 * velo_shape[0])] = np.nan
+    # fluxmap[:, -1 - int(0.25 * velo_shape[0]):] = np.nan
+    # fluxmap[:int(0.3 * velo_shape[0]), :] = np.nan
+    # fluxmap[-1 - int(0.25 * velo_shape[0]):, :] = np.nan
+
+    #for civ
+    # velomap_filtered[:, :int(0.75 * velo_shape[0])] = np.nan
+    # velomap_filtered[:, -1 - int(0.27 * velo_shape[0]):] = np.nan
+    # velomap_filtered[:int(0.3 * velo_shape[0]), :] = np.nan
+    # velomap_filtered[-1 - int(0.25 * velo_shape[0]):, :] = np.nan
+    # fluxmap[:, :int(0.75 * velo_shape[0])] = np.nan
+    # fluxmap[:, -1 - int(0.27 * velo_shape[0]):] = np.nan
+    # fluxmap[:int(0.3 * velo_shape[0]), :] = np.nan
+    # fluxmap[-1 - int(0.25 * velo_shape[0]):, :] = np.nan
+
 
     return velomap_filtered,fluxmap,ra_dis,dec_dis
 
@@ -415,25 +449,40 @@ def Run():
     # Sourcecheck([220.3505375, 40.05144444], [5163., 5203.], mark='2')
     # Sourcecheck([220.3528625, 40.05370556], [5100., 5550.], mark='2')
     lymanvelomap, lymanimg,ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',
-                                                     z=2.311,lamda0=1215.673,sigma_num=9.e-18,internum=[2,8])
+                                                     z=2.311,lamda0=1215.673,waveinterval=[3990.,4060],sigma_num=1.e-19,internum=[2,8],mask_sig=0.)#
 
-
-    ImagPlot.Twodplotimg([lymanvelomap,lymanimg],dec_dis,ra_dis,subclo=2,subrow=1,xlabel=r'arcsec',
-                         ylabel=r'arcsec',cbarlabel=[r'$velocity(km/s)$','$flux(erg/s/cm^{2})$'],
-                         subtitle=['velocity map','flux map'],title='Lyman-alpha')
+    lymanimg=lymanimg*1e19
+    ImagPlot.Twodplotimg(map=[lymanvelomap,lymanimg],x=dec_dis,y=ra_dis,subclo=2,subrow=1,xlabel=r'arcsec',
+                         ylabel=r'arcsec',cbarlabel=[r'$velocity(km/s)$','$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$'],
+                         subtitle=['velocity map','flux map'],title='z=2.311',contourmap=lymanimg,contourlevel=4.)
 
     # heiivelomap,heiiimg, ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
-    #                                      z=2.340,lamda0=1640,waveinterval=[5464.,5493.],sigma_num=2e-18,internum=[2,8])
-    # ImagPlot.Twodplotimg([heiivelomap, heiiimg], dec_dis, ra_dis, subclo=2, subrow=1, xlabel=r'arcsec',
-    #                      ylabel=r'arcsec', cbarlabel=[r'$velocity(km/s)$','$flux(erg/s/cm^{2})$'],
-    #                      subtitle=['velocity map', 'flux map'],title='HeII')
+    #                                      z=2.340,lamda0=1640,waveinterval=[5459.,5498.],sigma_num=.75e-19,internum=[2,8],mask_sig=1.)
     #
+    # heiiimg=heiiimg*1e19
+    # ImagPlot.Twodplotimg([heiivelomap, heiiimg], dec_dis, ra_dis, subclo=2, subrow=1, xlabel=r'arcsec',
+    #                      ylabel=r'arcsec', cbarlabel=[r'$velocity(km/s)$','$flux(10^{-19} \ erg/s/cm^{2}/\AA)$'],
+    #                      subtitle=['velocity map', 'flux map'],title='z=2.340',contourmap=heiiimg,contourlevel=3)
+
     #
     # civvelomap, civimg,ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
-    #                                     z=2.34385,lamda0=1549,waveinterval=[5160.,5200.],sigma_num=3.2e-18,internum=[2,8])
+    #                                     z=2.34385,lamda0=1549,waveinterval=[5160.,5200.],sigma_num=.9e-19,internum=[2,8],mask_sig=.8)
+    #
+    # civimg=civimg*1e19
     # ImagPlot.Twodplotimg([civvelomap, civimg], dec_dis, ra_dis, subclo=2, subrow=1, xlabel=r'arcsec',
-    #                      ylabel=r'arcsec', cbarlabel=[r'$velocity(km/s)$','$flux(erg/s/cm^{2})$'],
-    #                      subtitle=['velocity map', 'flux map'],title='CIV')
+    #                      ylabel=r'arcsec', cbarlabel=[r'$velocity(km/s)$','$flux(erg/s/cm^{2}/\AA)$'],
+    #                      subtitle=['velocity map', 'flux map'],title='z=2.344',contourmap=civimg,contourlevel=3)
+
+
+    # datacube=Cubegenerator.Cubegenerator((100,130,140),[4000.,4060.])
+    # mask=CubeData.Maskgenerator(datacube,2.)
+    # velocity = SpectralData.wavelength2velocity(np.linspace(4000.,4060.,100), 2.311, 1215.673)
+    # velomap,fluxmap=CubeData.Cubeweightedmean(datacube,velocity,mask)
+    # velomap_filtered = CubeData.Regionfilter(fluxmap, velomap, 1000)
+    # plt.imshow(velomap,cmap='jet')
+    # # plt.imshow(fluxmap,cmap='jet')
+    # plt.show()
+
 
 
     return None
