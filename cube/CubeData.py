@@ -158,7 +158,7 @@ def Imgreadout(img,header,name):
     hdulist.writeto(name)
     return None
 
-def Cubeweightedmean(cube,weight):
+def Cubeweightedmean(cube,weight,mask_cube):
     '''
     use to calculate the flux-weighted velocity map
     :param cube: datacube
@@ -166,20 +166,31 @@ def Cubeweightedmean(cube,weight):
     :return: flux-weighted velocity map
     '''
 
+    #reduce the noise in the spectra to extract the real signal for optimal flux-weighted map
+    cube = CubeNoiseFilter(cube, 3, .2)
+
     #calculate the denominator of this weight mean
+    raw_cube=cube.copy()
+    cube=cube*mask_cube
     totalmap = np.sum(cube, axis=0)
+    mask=np.sum(mask_cube,axis=0)
+    mask[np.where(mask==0.)]=1.
+    avermap=totalmap/mask
+
+
+
 
     #for image of each wavelength, multiply it with the weight(image is the flux array and weight is the velocity corresponding
     #to the wavelength )
     cube_vel=cube.copy()
-    cube_vel=CubeNoiseFilter(cube_vel,3,.2)
+    # cube_vel=CubeNoiseFilter(cube_vel,3,.2)
     for i in range(len(cube)):
         cube_vel[i,:,:]=cube_vel[i,:,:]*weight[i]
 
     #divide the multipiled cube by the totalmap to generate the flux-weighted velocity map
     meanmap=np.sum(cube_vel,axis=0)/totalmap
     # meanmap[np.where(meanmap==np.min(meanmap))]=0.
-    return meanmap
+    return meanmap,avermap
 
 def Angle2distance(ra,dec,refpoint):
     '''
@@ -243,3 +254,21 @@ def BadvalueEstimator(cube):
 
     img_sigma=np.std(cube)
     return img_sigma
+
+def Maskgenerator(data_cube,n_sigma):
+
+
+    mask_cube=np.zeros(np.shape(data_cube))
+    for data, mask in zip(data_cube,mask_cube):
+
+        std=np.std(data)
+        aver=np.mean(data)
+        index_set=np.where(data>=aver+n_sigma*std)
+        mask[index_set]=1.
+
+    return mask_cube
+
+
+
+
+

@@ -1,2 +1,2 @@
 from .CubeData import *
-__all__=['CubeData']
+__all__=['CubeData','Cubegenerator']
