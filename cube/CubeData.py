@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from spectral import SpectralData
 from spectral_cube import SpectralCube
-from imag import ImagPlot,ImgInterSmo
+from imag import ImgInterSmo
 from astropy import constants as const
 from astropy import units as u
 from astropy.coordinates import Angle
@@ -44,7 +44,6 @@ def Readheader(path,name):
     header=fitsfile[0].header
     fitsfile.close()
     return header
-
 
 def CubeCut(cube=None, cube_wavelength=None, emissionline=None,waverange=None):
     '''
@@ -166,11 +165,13 @@ def Cubeweightedmean(cube,weight,mask_cube):
     :return: flux-weighted velocity map
     '''
 
-    #reduce the noise in the spectra to extract the real signal for optimal flux-weighted map
-    cube = CubeNoiseFilter(cube, 3, .2)
 
-    #calculate the denominator of this weight mean
     raw_cube=cube.copy()
+
+    # we use optimal extraction method to generate the flux-weighted map,
+    # to generate the optimal flux map, we first multiply the cube with the mask
+    # sum the cube up along the axis of wavelength and get the flux map,
+    # then by dividing the flux map with the sumed-up mask we ge the intensity map
     cube=cube*mask_cube
     totalmap = np.sum(cube, axis=0)
     mask=np.sum(mask_cube,axis=0)
@@ -240,35 +241,79 @@ def Cubeseeinglimit(cube,size=[6.,4.]):
     return cube
 
 def Cubebadpixelremovor(cube,mean=0.,sigma=1.):
+    '''
+    some pixels' value is negative, some should be zero, this function remove these kinds of
+    pixels
+    :param cube: data cube
+    :param mean: average value of this cube
+    :param sigma: standard deviation
+    :return: bad-pixel-removed cube
+    '''
+
     cube[np.where(cube<(mean+sigma))]=0.
     return cube
 
 def Regionfilter(img1,img2,sigma_num=0.3):
-
-
+    '''
+    select the region in image 2 whose value is beyond the threshold in image 1
+    :param img1: reference image
+    :param img2: image wait for filter
+    :param sigma_num: threshold
+    :return: filtered image
+    '''
     img_return=img2.copy()
     img_return[np.where(img1<sigma_num)]=np.nan
     return img_return
 
 def BadvalueEstimator(cube):
+    '''
+    estimate the threshold which is used to remove the bad pixel in image
+    :param cube: used to estimate the threshold
+    :return: threshold
+    '''
+
 
     img_sigma=np.std(cube)
     return img_sigma
 
-def Maskgenerator(data_cube,n_sigma):
+def Maskgenerator(data_cube,threshold):
+    '''
+    generathe the mask cube for the data cube, it check each slice in cube
+    and select pixels whose value is beyond the threshold of its own slice
+    :param data_cube: wait for mask
+    :param threshold: threshold
+    :return: mask cube for the data cube
+    '''
 
-
+    #generate the mask cube
     mask_cube=np.zeros(np.shape(data_cube))
-    for data, mask in zip(data_cube,mask_cube):
 
-        std=np.std(data)
-        aver=np.mean(data)
-        index_set=np.where(data>=aver+n_sigma*std)
+    # for each slice, generate a mask with the given threshold
+    for data, mask in zip(data_cube,mask_cube):
+        index_set=np.where(data>=threshold)
         mask[index_set]=1.
 
     return mask_cube
 
+def Maskgenerator2(data_cube,n_sigma):
+    '''
+    generate the mask cube, it check the spectra of each point, only select
+    pixels whose value is beyond the threshold of this spectra
+    :param data_cube: wait for mask
+    :param n_sigma: threshold
+    :return: mask cube
+    '''
 
+    #generate the mask cube
+    mask_shape = np.shape(data_cube)
+    mask_cube = np.zeros(mask_shape)
 
+    #check the spectra of each point and select the pixel satisfied the condition
+    for i in range(mask_shape[1]):
+        for j in range(mask_shape[2]):
+            spec_aver = np.mean(data_cube[:, i, j])
+            spec_std = np.std(data_cube[:, i, j])
+            index_set = np.where(data_cube[:, i, j] >= spec_aver + n_sigma * spec_std)
+            mask_cube[index_set, i, j] += 1
 
-
+    return mask_cube
