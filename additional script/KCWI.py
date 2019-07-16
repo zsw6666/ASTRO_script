@@ -1,12 +1,12 @@
 from cube import CubeData, Cubegenerator
 from spectral import SpectralData
 from imag import ImagPlot,ImgInterSmo
-from datareduction import IO
 from matplotlib import pyplot as plt
 from astropy import units as u
 from pylab import pcolor
 import numpy as np
 import Cosmology
+import IO
 
 
 def Cubepre(path,cubename):
@@ -50,7 +50,7 @@ def Mapspectral(waverange=[3800.,4200.]):
         plt.savefig(str(i)+'.png')
     return None
 
-def Indispectral(position,size=[5,2],cutinterval=[4020.,4028.]):
+def Indispectral(path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',filename='1441+4003_comb_psfs_icubes.fits',position=[0,0],size=[5,2],cutinterval=[4020.,4028.],normalize=False):
     '''
     generate the spectra for a certain postion and wavelength interval
     :param position: selected position
@@ -60,15 +60,20 @@ def Indispectral(position,size=[5,2],cutinterval=[4020.,4028.]):
     '''
 
     #read the datacube
-    flux, wavelength ,wcs= Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits')
+    flux, wavelength ,wcs= Cubepre(path, filename)
     ra,dec,=CubeData.WCS(wcs)
 
     #generate the spectra
     onedspectral=SpectralData.SourceSpectral(flux,size,position,ra.value,dec.value)
-    plt.figure('spectra',figsize=(17, 7))
-    img=SpectralData.SpectralPlot(onedspectral,wavelength.value,cutinterval)
-    # lowerline,upperline=SpectralData.WavelengthSelectPlot(onedspectral.value,cutinterval)
-    return img#lowerline,upperline
+    lowlimit,uplimit=SpectralData.Findwavelength(wavelength.value,cutinterval)
+    # if normalize is True:
+    #     onedspectral=onedspectral/np.max(onedspectral)
+    # plt.figure('spectra',figsize=(17, 7))
+    # img=SpectralData.SpectralPlot(onedspectral,wavelength.value,cutinterval)
+    # # lowerline,upperline=SpectralData.WavelengthSelectPlot(onedspectral.value,cutinterval)
+    # return img#lowerline,upperline
+
+    return onedspectral[lowlimit:uplimit]/np.max(onedspectral[lowlimit:uplimit]), wavelength.value[lowlimit:uplimit]
 
 def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.],internum=None):
     '''
@@ -324,7 +329,6 @@ def velocitymap(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[4010.
 
     return velomap,fluxmap,ra_dis,dec_dis
 
-
 def velocitymap_filter(path=None,filename=None,z=2.3093,lamda0=None,waveinterval=[3990.,4060.],sigma_num=0.25,internum=None,mask_sig1=0.,mask_sig2=2.):
     '''
     show the velocity map which is only within the emission region
@@ -340,47 +344,49 @@ def velocitymap_filter(path=None,filename=None,z=2.3093,lamda0=None,waveinterval
 
     # produce the velocity map
     velomap,fluxmap,ra_dis,dec_dis=velocitymap(path,filename,z,lamda0,waveinterval,internum,mask_sig1,mask_sig2)
+    SNmap=CubeData.SNmapgenerator(fluxmap,waveinterval,1e3,600)
 
 
     ##
 
     # do the filter, only keep the pixels we need
-    velomap_filtered=CubeData.Regionfilter(fluxmap,velomap,sigma_num)
+    velomap_filtered=CubeData.Regionfilter(SNmap,velomap,sigma_num)
     velo_shape=np.shape(velomap_filtered)
 
-    #for lyman-alpha
-    # velomap_filtered[:,:int(0.15*velo_shape[0])]=np.nan
-    # velomap_filtered[:,-1-int(0.07*velo_shape[0]):]=np.nan
-    # velomap_filtered[:int(0.1*velo_shape[0]),:]=np.nan
-    # velomap_filtered[-1-int(0.1 * velo_shape[0]):, :] = np.nan
-    # fluxmap[:, :int(0.1 * velo_shape[0])] = np.nan
-    # fluxmap[:, -1 - int(0.1 * velo_shape[0]):] = np.nan
-    # fluxmap[:int(0.01 * velo_shape[0]), :] = np.nan
-    # fluxmap[-1 - int(0.1 * velo_shape[0]):, :] = np.nan
 
-    #for heii
-    # velomap_filtered[:, :int(0.7 * velo_shape[0])] = np.nan
-    # velomap_filtered[:, -1 - int(0.25 * velo_shape[0]):] = np.nan
-    # velomap_filtered[:int(0.2 * velo_shape[0]), :] = np.nan
-    # velomap_filtered[-1 - int(0.15 * velo_shape[0]):, :] = np.nan
-    # fluxmap[:, :int(0.7 * velo_shape[0])] = np.nan
-    # fluxmap[:, -1 - int(0.25 * velo_shape[0]):] = np.nan
-    # fluxmap[:int(0.3 * velo_shape[0]), :] = np.nan
-    # fluxmap[-1 - int(0.25 * velo_shape[0]):, :] = np.nan
+    if lamda0==1215.673:
+        #for lyman-alpha
+        velomap_filtered[:,:int(0.15*velo_shape[0])]=np.nan
+        velomap_filtered[:,-1-int(0.07*velo_shape[0]):]=np.nan
+        velomap_filtered[:int(0.1*velo_shape[0]),:]=np.nan
+        velomap_filtered[-1-int(0.1 * velo_shape[0]):, :] = np.nan
+        # fluxmap[:, :int(0.1 * velo_shape[0])] = np.nan
+        # fluxmap[:, -1 - int(0.1 * velo_shape[0]):] = np.nan
+        # fluxmap[:int(0.01 * velo_shape[0]), :] = np.nan
+        # fluxmap[-1 - int(0.1 * velo_shape[0]):, :] = np.nan
+    elif lamda0==1640:
+        # for heii
+        velomap_filtered[:, :int(0.7 * velo_shape[0])] = np.nan
+        velomap_filtered[:, -1 - int(0.25 * velo_shape[0]):] = np.nan
+        velomap_filtered[:int(0.25 * velo_shape[0]), :] = np.nan
+        velomap_filtered[-1 - int(0.15 * velo_shape[0]):, :] = np.nan
+        # fluxmap[:, :int(0.7 * velo_shape[0])] = np.nan
+        # fluxmap[:, -1 - int(0.25 * velo_shape[0]):] = np.nan
+        # fluxmap[:int(0.3 * velo_shape[0]), :] = np.nan
+        # fluxmap[-1 - int(0.25 * velo_shape[0]):, :] = np.nan
+    else:
+        #for civ
+        velomap_filtered[:, :int(0.5 * velo_shape[0])] = np.nan
+        velomap_filtered[:, -1 - int(0.2 * velo_shape[0]):] = np.nan
+        velomap_filtered[:int(0.2 * velo_shape[0]), :] = np.nan
+        velomap_filtered[-1 - int(0.2 * velo_shape[0]):, :] = np.nan
+        # fluxmap[:, :int(0.75 * velo_shape[0])] = np.nan
+        # fluxmap[:, -1 - int(0.27 * velo_shape[0]):] = np.nan
+        # fluxmap[:int(0.3 * velo_shape[0]), :] = np.nan
+        # fluxmap[-1 - int(0.25 * velo_shape[0]):, :] = np.nan
 
-    #for civ
-    # velomap_filtered[:, :int(0.5 * velo_shape[0])] = np.nan
-    # velomap_filtered[:, -1 - int(0.2 * velo_shape[0]):] = np.nan
-    # velomap_filtered[:int(0.2 * velo_shape[0]), :] = np.nan
-    # velomap_filtered[-1 - int(0.2 * velo_shape[0]):, :] = np.nan
-    # fluxmap[:, :int(0.75 * velo_shape[0])] = np.nan
-    # fluxmap[:, -1 - int(0.27 * velo_shape[0]):] = np.nan
-    # fluxmap[:int(0.3 * velo_shape[0]), :] = np.nan
-    # fluxmap[-1 - int(0.25 * velo_shape[0]):, :] = np.nan
 
-
-    return velomap_filtered,fluxmap,ra_dis,dec_dis
-
+    return velomap_filtered,fluxmap,SNmap,ra_dis,dec_dis
 
 def slitspectra(position):
     '''
@@ -429,6 +435,36 @@ def slitspectra(position):
     return None
 
 
+def emissionlinegenerator(wavelength_c,width,peakflux,wavelengthrange):
+    '''
+    with center wavelength, line width and peak intensity, we use gaussian function to rebuild the
+    emission line
+    :param wavelength_c: central wavelength of the emission line
+    :param width: numpy array, line width for each emission line
+    :param peakflux: numpy array, peak intensity for each emission line
+    :param wavelengthrange: numpy array, wavelength range
+    :return: spectra of a emission line
+    '''
+
+    #convert line width to sigma for gaussian function
+    sigma=width/(2*np.sqrt(2*np.log(2)))
+    emissionline=Cubegenerator.gaussian(wavelengthrange,wavelength_c,sigma,peakflux)
+    return emissionline
+
+
+def emissionspectragenerator(wavelength,width,peakflux):
+    '''
+    this function generate the sky emission spectra
+    :param wavelength: wavelength list for each emission line
+    :param width: width list for each emission line
+    :param peakflux: peak flux for each emission line
+    :return: spectra with all emission line
+    '''
+    spectra=np.zeros(np.shape(wavelength))
+    for i in range(len(wavelength)):
+        spectra=emissionlinegenerator(wavelength[i],width[i],peakflux[i],wavelength)+spectra
+    return spectra
+
 def Run():
     # Mapspectral(waverange=[4000.,4050.])
     #  Run_indispectral([25,18])
@@ -438,8 +474,52 @@ def Run():
     # Run_img([0,100])
     # Mapimg(internum=3,cutrange=8)
     # Indiimg(mark='2')
-    # Indispectral([220.3499625,40.04884167],cutinterval=[5600.,5700.])
-    # plt.show()
+
+    #check the wavelength calibration of this two data cube
+
+    #read the cube data, extract the spectra from it and also smooth the spectra
+    spectra1,wavelength1=Indispectral(path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/MAMMOHT-1_individual',
+                                      filename='1441+4003_00136_icubes_cut.fits',size=[20,10],
+                                      position=[220.3499625,40.04884167],cutinterval=[3600.,4300.],normalize=True)
+    spectra1=ImgInterSmo.NoiseFilter(spectra1,3,.1)
+    spectra2, wavelength2 = Indispectral(path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/MAMMOHT-1_individual',
+                                         filename='1441+4003_00145_icubes_cut.fits',size=[20,10],
+                                         position=[220.3499625, 40.04884167], cutinterval=[5100., 5600.], normalize=True)
+    spectra2 = ImgInterSmo.NoiseFilter(spectra2, 3, .1)
+
+    #read the sky emission line template, generate the template spectra and also smooth it.
+    skyspec5 = IO.Read_dat(
+        '/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/sky emission line/J_A+A_407_1157/table5.dat')
+    wavelength5=skyspec5[:-150,1]-4
+    peakflux5 = skyspec5[:-150, 3] / np.max(skyspec5[:-150, 3])
+    width5=skyspec5[:-150,2]
+    skyspectra5=emissionspectragenerator(wavelength5,width5,peakflux5)
+    skyspectra5=ImgInterSmo.NoiseFilter(skyspectra5,10,.1)
+    skyspec6 = IO.Read_dat(
+        '/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/sky emission line/J_A+A_407_1157/table6.dat')
+    wavelength6=skyspec6[10:-20,1]
+    peakflux6 = skyspec6[10:-20, 3]/np.max(skyspec6[10:-20,3])
+    width6=skyspec6[10:-20,2]
+    skyspectra6=emissionspectragenerator(wavelength6,width6,peakflux6)
+
+    #plot the results
+    fig,AX=plt.subplots(2,1)
+    AX=AX.flatten()
+    AX[0].plot(wavelength1,spectra1,label='cube spectra')
+    AX[0].plot(wavelength5,skyspectra5,c='orange',label='sky emission line')
+    AX[1].plot(wavelength2, spectra2,label='cube spectra')
+    AX[1].plot(wavelength6, skyspectra6, c='orange',label='sky emission line')
+    AX[1].tick_params(labelsize=15.)
+    AX[0].tick_params(labelsize=15.)
+    AX[0].legend(fontsize=15.)
+    AX[1].legend(fontsize=15.)
+    fig.text(0.5, 0.03, 'Wavelength($\AA$)', ha='center', fontsize=25.)
+    fig.text(0.05, 0.5, 'Normalized Intensity', va='center', rotation='vertical', fontsize=25.)
+    plt.show()
+
+
+
+
     # Sourcecheck([220.3522,40.0529],[4006.,4014.],mark='2')#source 1
     # Sourcecheck([220.3539,40.0536],[4006.,4014.],mark='2')#source 2
     # Sourcecheck([220.3491,40.0522],[4022.,4030.],mark='2')# source 3
@@ -458,30 +538,30 @@ def Run():
     # Sourcecheck([220.3505375,40.05144444],[5460.,5500.],mark='2')
     # Sourcecheck([220.3505375, 40.05144444], [5163., 5203.], mark='2')
     # Sourcecheck([220.3528625, 40.05370556], [5100., 5550.], mark='2')
-    # lymanvelomap, lymanimg,ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',
-    #                                                  z=2.310,lamda0=1215.673,waveinterval=[3990.,4060],sigma_num=1.6e-19,internum=[2,8],mask_sig1=1.2e-19,mask_sig2=.35)#
+    # lymanvelomap, lymanimg,lymanSN,ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',
+    #                                                  z=2.310,lamda0=1215.673,waveinterval=[3990.,4060],sigma_num=6,internum=[2,8],mask_sig1=1.2e-19,mask_sig2=.35)#1.6e-19
     #
     # lymanimg=lymanimg*1e19
     # ImagPlot.Twodplotimg(map=[lymanvelomap,lymanimg],x=dec_dis,y=ra_dis,subclo=2,subrow=1,xlabel=r'arcsec',
     #                      ylabel=r'arcsec',cbarlabel=[r'$velocity(km/s)$','$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$'],
-    #                      subtitle=['velocity map','flux map'],title='z=2.311',contourmap=lymanimg,contourlevel=[1.6])
+    #                      subtitle=['velocity map','flux map'],title='z=2.311',contourmap=lymanimg,contourlevel=[2,4.5,7.7,11.8,17])#[2,4.5,7.7,11.8,17]
     #
-    # heiivelomap,heiiimg, ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
-    #                                      z=2.340,lamda0=1640,waveinterval=[5459.,5498.],sigma_num=.6e-19,internum=[2,8],mask_sig1=4.5e-20,mask_sig2=0.2)
+    # heiivelomap,heiiimg,heiiSN ,ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
+    #                                      z=2.340,lamda0=1640,waveinterval=[5459.,5498.],sigma_num=3.8,internum=[2,8],mask_sig1=4.5e-20,mask_sig2=0.2)#.6e-19
     #
     # heiiimg=heiiimg*1e19
     # ImagPlot.Twodplotimg([heiivelomap, heiiimg], dec_dis, ra_dis, subclo=2, subrow=1, xlabel=r'arcsec',
     #                      ylabel=r'arcsec', cbarlabel=[r'$velocity(km/s)$','$flux(10^{-19} \ erg/s/cm^{2}/\AA)$'],
-    #                      subtitle=['velocity map', 'flux map'],title='z=2.340',contourmap=heiiimg,contourlevel=[0.6])
+    #                      subtitle=['velocity map', 'flux map'],title='z=2.340',contourmap=heiiimg,contourlevel=[0.58,.9,1.3,1.8,2])
     # #
     # #
-    # civvelomap, civimg,ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
-    #                                     z=2.34385,lamda0=1549,waveinterval=[5160.,5200.],sigma_num=.65e-19,internum=[2,8], mask_sig1=5.3e-20,mask_sig2=.2)
+    # civvelomap, civimg,civSN,ra_dis, dec_dis=velocitymap_filter('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_psfs_icubes.fits',
+    #                                     z=2.34385,lamda0=1549,waveinterval=[5160.,5200.],sigma_num=4.,internum=[2,8], mask_sig1=5.3e-20,mask_sig2=.2)
     #
     # civimg=civimg*1e19
     # ImagPlot.Twodplotimg([civvelomap, civimg], dec_dis, ra_dis, subclo=2, subrow=1, xlabel=r'arcsec',
     #                      ylabel=r'arcsec', cbarlabel=[r'$velocity(km/s)$','$flux(10^{-19} \ erg/s/cm^{2}/\AA)$'],
-    #                      subtitle=['velocity map', 'flux map'],title='z=2.344',contourmap=civimg,contourlevel=[.65])
+    #                      subtitle=['velocity map', 'flux map'],title='z=2.344',contourmap=civimg,contourlevel=[.653,.823,1.05,1.24,1.46,1.74])
 
 
     # datacube=Cubegenerator.Cubegenerator((100,130,140),[4000.,4060.])
