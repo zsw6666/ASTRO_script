@@ -30,8 +30,8 @@ def Spectragenerator(spectra_length,wavelengthrange,central_wavelength,width):
     return spectra
 
 
-def gaussian(x, mu, sig):
-    return np.exp(-np.power(x - mu, 2.) / (2 * np.power(sig, 2.)))
+def gaussian(x, mu, sig,A=1):
+    return A*np.exp(-np.power(x - mu, 2.) / (2 * np.power(sig, 2.)))
 
 
 if __name__ =='__main__':

@@ -1,7 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pyspeckit
 from cube import CubeData
 from astropy import constants as const
+from astropy import units as u
 
 '''
 This script used to access with the spectra
@@ -68,9 +70,12 @@ def SpectralPlot(onedspectral, wavelength,wavecut=None,title=None):
     plt.title(title)
     plt.xlabel(r'$wavelength \ (\AA)$')
     plt.ylabel(r'$flux \ (erg/s/m^{2}/ \AA)$')
-    lowlimit,uplimit=Findwavelength(wavelength,wavecut)
+    if wavecut is not None:
+        lowlimit,uplimit=Findwavelength(wavelength,wavecut)
     # img=plt.plot(wavelength[800:],onedspectral[800:])
-    img = plt.plot(wavelength[lowlimit:uplimit], onedspectral[lowlimit:uplimit])
+        img = plt.plot(wavelength[lowlimit:uplimit], onedspectral[lowlimit:uplimit])
+    else:
+        img=plt.plot(wavelength,onedspectral)
     return img
 
 def wavelength2velocity(wavelength,z,intrinsicwavelength):
@@ -101,13 +106,67 @@ def WavelengthSelectPlot(spectral,waverange):
     upperline=plt.plot(upperwave,np.linspace(np.min(spectral),lineupper,100),c='r')
     return lowerline,upperline
 
-def Findwavelength(wavelength,waverange):
+def Findwavelength(wavelength,waverange,threshold=1e-4):
     '''
     find the physical position of the selected wavelength in the wavelength interval
     :param wavelength: wavelength axis read from the IFU fits
     :param waverange: interval which you select
     :return: the physical position of the interval's boundaries
     '''
-    lowerlimit, upperlimit = np.where(abs(wavelength - waverange[0]) <= 1e-4), np.where(
-        abs(wavelength - waverange[1]) <= 1e-4)
+    lowerlimit, upperlimit = np.where(abs(wavelength - waverange[0]) <= threshold), np.where(
+        abs(wavelength - waverange[1]) <= threshold)
     return lowerlimit[0][0],upperlimit[0][0]
+
+def Specplotfit(filename,wavecut,fitmodel,guesses=None,rewave=None,position=None,axis=None,title='',
+                color='black',xlabel='velocity km/s',ylabel='flux $erg/s/cm^{2}/ \AA$',fontsize=20.,annotate=''):
+    '''
+    new function for spectrum inspection for a specific position and aperture
+    :param filename: data cube fits name
+    :param wavecut: wavelength range
+    :param fitmodel: model to fit the emission and absorption line
+    :param guesses: initial parameter for the fit model
+    :param rewave: referece wavelength for the convertion from wavelength to velocity
+    :param position: position we want to extract wavelength from
+    :param axis: figure.axes
+    :param title: title of the plot
+    :param color: color of line
+    :param xlabel: x label
+    :param ylabel: y label
+    :param fontsize: size of words
+    :param annotate:
+    :return: None
+    '''
+    #read cube, select specific wavelength slices
+    #mark the position, convert wavelength to velocity
+    #normalize flux and subtract baseline
+    cube=pyspeckit.Cube(filename)
+    cube.cube=cube.cube*1e-16
+    subcube=cube.slice(wavecut[0],wavecut[1],unit='Angstrom')
+    spectra=subcube.get_apspec(position)
+    spectra.xarr.refX=rewave*u.AA
+    spectra.xarr.velocity_convention='optical'
+    spectra.xarr.convert_to_unit(u.km/u.s)
+    spectra.flux=spectra.flux/np.max(spectra.flux)
+    spectra.baseline(order=0,subtract=False)
+
+
+    # spectra.smooth(2)
+    spectra.flux = spectra.flux / np.max(spectra.flux)
+
+    #plot spectra
+    if axis is None:
+        spectra.plotter(plt.figure(1),xlabel='',ylabel='',title=title,color=color,linewidht=1.5)
+    else:
+        spectra.plotter(axis=axis, xlabel='', ylabel='', title=title,
+                        color=color,clear=False,linewidth=1.5)
+
+
+    #fit spectra with gaussian function usually
+    spectra.specfit(fittype=fitmodel,lw=1.5)
+    spectra.specfit.plot_components(add_baseline=True,component_yoffset=0.,lw=1.5)
+    # spectra.specfit.plotresiduals(axis=axis,clear=False,yoffset=0,label=False,linewidth=1.5,color='gray')
+    axis.set_xlabel('',fontsize=fontsize)
+    axis.set_ylabel('',fontsize=fontsize)
+    axis.annotate(annotate,(-2050,1.1), fontsize=fontsize)
+    axis.tick_params(labelsize=15.)
+

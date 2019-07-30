@@ -5,8 +5,8 @@ from imag import ImagPlot, ImgInterSmo
 from photutils import DAOStarFinder as sourcefinder
 
 
-path = '/Users/shiwuzhang/work&study/ASTRO/MAMMOTH_KCWI'
-cube_name = '1441+4003_comb_ss_icubes.fits'
+path = '/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI'
+cube_name = '1441+4003_comb_psfs_icubes.fits'
 # cube_name='1441+4003_comb_psfs_icubes.fits'
 
 

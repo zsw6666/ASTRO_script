@@ -22,7 +22,7 @@ def ImgSmoothor(img,sigma):
     img_smooth=ndimage.gaussian_filter(img,sigma)
     return img_smooth
 
-def CubeInterpolation(cube, ra, dec, internum):
+def CubeInterpolation(cube, ra=None, dec=None, internum=None):
     '''
     interpolate the image of every wavelength in the cube
     :param cube: cube waiting interpolation
@@ -34,16 +34,17 @@ def CubeInterpolation(cube, ra, dec, internum):
     inter_shape=(cube_shape[0],cube_shape[1]*internum[0],cube_shape[2]*internum[1])
     cube_inter=np.zeros(inter_shape)
 
-    # interpolate the coordinate
-    ra_inter=Arrayinterpolation(ra,internum[0])
-    dec_inter=Arrayinterpolation(dec,internum[1])
+    if (ra is not None) and (dec is not None):
+        # interpolate the coordinate
+        ra=Arrayinterpolation(ra,internum[0])
+        dec=Arrayinterpolation(dec,internum[1])
 
 
     # for each slice in cube, interpolate the image
     for i in range(np.shape(cube)[0]):
         cube_inter[i,:,:]=Arrayinterpolation(cube[i,:,:],internum)
 
-    return cube_inter,ra_inter,dec_inter
+    return cube_inter,ra,dec
 
 def CubeSmooth(cube,sigma=(3.,)):
     '''

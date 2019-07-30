@@ -1,9 +1,10 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import pyspeckit
 from spectral import SpectralData
 from spectral_cube import SpectralCube
-from imag import ImgInterSmo
+from imag import ImgInterSmo,ImagPlot
 from astropy import constants as const
 from astropy import units as u
 from astropy.coordinates import Angle
@@ -26,10 +27,10 @@ def ReadCube(path, cube_name):
     :return: 3D data and wavelength axis
     '''
 
-    cube=AccessCube(path,cube_name)
-    wcs = cube.world[:]
-    print(cube)
-    return cube._data, cube.spectral_axis, wcs, cube
+    cube1=AccessCube(path,cube_name)
+    wcs = cube1.world[:]
+    print(cube1)
+    return cube1._data, cube1.spectral_axis, wcs, cube1
 
 def Editheader(path,name,keyword,newvalue):
     os.chdir(path)
@@ -45,7 +46,7 @@ def Readheader(path,name):
     fitsfile.close()
     return header
 
-def CubeCut(cube=None, cube_wavelength=None, emissionline=None,waverange=None):
+def CubeCut(cube=None, cube_wavelength=None, emissionline=None,waverange=None,threshold=1e-4):
     '''
     cut the cube and return the part we need
     :param cube: cube data
@@ -54,7 +55,7 @@ def CubeCut(cube=None, cube_wavelength=None, emissionline=None,waverange=None):
     :param rang: if set emission line to manual,then this parameter must be given
     :return: part of the initial cube and corresponding wavelength
     '''
-    cutrange = SpectralData.Findwavelength(cube_wavelength, waverange)
+    cutrange = SpectralData.Findwavelength(cube_wavelength, waverange,threshold)
     if emissionline == 'manual':
         cube_cut, wavelength_cut = cube[cutrange[0]:cutrange[1],:,:],cube_wavelength[cutrange[0]:cutrange[1]]
     else:
@@ -174,11 +175,6 @@ def Cubeweightedmean(cube,weight,mask_cube):
     # then by dividing the flux map with the sumed-up mask we ge the intensity map
     cube=cube*mask_cube
     totalmap = np.sum(cube, axis=0)
-    mask=np.sum(mask_cube,axis=0)
-    mask[np.where(mask==0.)]=1.
-    avermap=totalmap/mask
-
-
 
 
     #for image of each wavelength, multiply it with the weight(image is the flux array and weight is the velocity corresponding
@@ -191,7 +187,28 @@ def Cubeweightedmean(cube,weight,mask_cube):
     #divide the multipiled cube by the totalmap to generate the flux-weighted velocity map
     meanmap=np.sum(cube_vel,axis=0)/totalmap
     # meanmap[np.where(meanmap==np.min(meanmap))]=0.
-    return meanmap,avermap
+    return meanmap
+
+def Cubeweightstd(velocity=None,cube_velocity=None,mask_cube=None,velomap=None):
+    '''
+    calculate the standard deviation map
+    :param velocity: mean velocity used for calculation
+    :param cube_velocity: flux for each pixel
+    :param mask_cube: mask cube
+    :param velomap: mean velocity map for each pixel
+    :return: standard deviation map
+    '''
+
+    #generate new cube for the standard deviation calculation
+    cube_shape=np.shape(cube_velocity)
+    velocity=velocity[:,np.newaxis,np.newaxis]
+    for i in range(1,3):
+        velocity=np.repeat(velocity,cube_shape[i],axis=i)
+
+    #calculate the standard deviation
+    velodisp = (velocity - velomap) ** 2
+    velodispmap = np.sqrt(Cubeweightedmean(cube_velocity, velodisp, mask_cube))
+    return velodispmap
 
 def Angle2distance(ra,dec,refpoint):
     '''
@@ -250,7 +267,7 @@ def Cubebadpixelremovor(cube,mean=0.,sigma=1.):
     :return: bad-pixel-removed cube
     '''
 
-    cube[np.where(cube<(mean+sigma))]=0.
+    cube[np.where(np.abs(cube-mean)>sigma)]=mean
     return cube
 
 def Regionfilter(img1,img2,sigma_num=0.3):
@@ -263,6 +280,7 @@ def Regionfilter(img1,img2,sigma_num=0.3):
     '''
     img_return=img2.copy()
     img_return[np.where(img1<sigma_num)]=np.nan
+    img_return[np.where(~(img1>0.))]=np.nan
     return img_return
 
 def BadvalueEstimator(cube):
@@ -276,12 +294,12 @@ def BadvalueEstimator(cube):
     img_sigma=np.std(cube)
     return img_sigma
 
-def Maskgenerator(data_cube,threshold):
+def Maskgenerator(data_cube,n_sig):
     '''
     generathe the mask cube for the data cube, it check each slice in cube
     and select pixels whose value is beyond the threshold of its own slice
     :param data_cube: wait for mask
-    :param threshold: threshold
+    :param n_sig: threshold
     :return: mask cube for the data cube
     '''
 
@@ -290,6 +308,7 @@ def Maskgenerator(data_cube,threshold):
 
     # for each slice, generate a mask with the given threshold
     for data, mask in zip(data_cube,mask_cube):
+        threshold=np.mean(data)+n_sig*np.std(data)
         index_set=np.where(data>=threshold)
         mask[index_set]=1.
 
@@ -317,3 +336,40 @@ def Maskgenerator2(data_cube,n_sigma):
             mask_cube[index_set, i, j] += 1
 
     return mask_cube
+
+def SNmapgenerator(fluxmap,wavelengthinterval,R,t):
+    '''
+    generate the SNR map from flux map
+    :param fluxmap: nb image
+    :param wavelengthinterval: wavelength range
+    :param R: radius of telescope
+    :param t: exposure time
+    :return: SNR map
+    '''
+
+    #select the mean wavelength as the wavelength to calculate
+    #the average energy of photons
+    wavelength_c=np.mean(wavelengthinterval)*u.AA
+    E_photon=((const.h*(const.c/wavelength_c)).to(u.erg)).value
+
+    #convert flux map to photon map
+    photonmap=(fluxmap*0.5*t*(np.pi*R**2))/E_photon
+
+    #calculate the SNR map
+    SNmap=photonmap/np.sqrt(photonmap)
+    return SNmap
+
+def OptimalextractImg(datacube,mask_cube):
+    '''
+    optimal extract the narrow band image
+    :param datacube: data cube used to extract the narrow band image
+    :param mask_cube: mask cube for extraction
+    :return: optimal-extracted nb image
+    '''
+
+    mask_data=datacube*mask_cube
+    map=np.sum(mask_data,axis=0)
+    mask=np.sum(mask_cube,axis=0)
+    mask[np.where(mask == 0.)] = 1.
+    avermap = map / mask
+    return avermap
