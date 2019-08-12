@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy import signal, ndimage
 
 
@@ -71,7 +72,7 @@ def InSmimg(map,internum,sigma):
     map=ndimage.gaussian_filter(map,sigma)
     return map
 
-def NoiseFilter(data,N,wn):
+def NoiseFilter(data,N,wn,mark='lowpass'):
     '''
     reduce the noise
     :param data: data waited to be rduced
@@ -80,7 +81,7 @@ def NoiseFilter(data,N,wn):
     :return: filtered data
     '''
 
-    b, a = signal.butter(N, wn,'lowpass')
+    b, a = signal.butter(N, wn,mark)
     filtereddata = signal.filtfilt(b, a, data)
     return filtereddata
 
@@ -102,13 +103,23 @@ def Imgseeinglimit(img,size=[3,1]):
 
     return img
 
-# if __name__=='__main__':
-#     import matplotlib.pyplot as plt
-#     x = np.linspace(0, 10*np.pi, 20)
-#     y = np.cos(x)
-#     yinter=Arrayinterpolation(y,1000)
-#     xinter=np.linspace(0,10*np.pi,1000)
-#     plt.plot(xinter,yinter)
-#     plt.plot(x,y)
-#     plt.show()
+def Imgnan(img):
+    '''
+    counts the fraction of np.nan in array
+    :param img: 1d,2d,3d.....nd array
+    :return: if the fraction is more than .4 return false else true
+    '''
+    counts = np.isnan(img).sum()
+    return (counts/np.size(img))<=0.4
+
+def Isarraysignificance(array,noise):
+    '''
+
+    :param array: data
+    :param noise: noise level
+    :return: find it there's quantities of abnormal value
+    in the array, if it's true return true else return false
+    '''
+    sigpoint=array[np.where(array>3*noise)]
+    return len(sigpoint)/len(array)>.25
 
