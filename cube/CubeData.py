@@ -1,10 +1,9 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import pyspeckit
 from spectral import SpectralData
 from spectral_cube import SpectralCube
-from imag import ImgInterSmo,ImagPlot
+from imag import ImgInterSmo
 from astropy import constants as const
 from astropy import units as u
 from astropy.coordinates import Angle
@@ -88,7 +87,8 @@ def FLux(cube=None, wavelength_axis=None,gain=None, exposuretime=None,emissionli
 def WCS(wcsmap):
     '''
     calculate ra and dec of this cube
-    :param wcsmap: 3D cube for wavelength ra and dec
+    :param wcsmap: list of two 3d cube,
+    each pixels in cube contain ra and dec of this cube
     :return: ra and dec all 1D array
     '''
     ramap=np.mean(wcsmap[2],axis=0)
@@ -283,18 +283,16 @@ def Regionfilter(img1,img2,sigma_num=0.3):
     img_return[np.where(~(img1>0.))]=np.nan
     return img_return
 
-def BadvalueEstimator(cube):
+def ThresholdEstimator(cube,n_sig):
     '''
     estimate the threshold which is used to remove the bad pixel in image
     :param cube: used to estimate the threshold
     :return: threshold
     '''
+    threshold=n_sig*np.std(cube)+np.mean(cube)
+    return threshold
 
-
-    img_sigma=np.std(cube)
-    return img_sigma
-
-def Maskgenerator(data_cube,n_sig):
+def Maskgenerator(data_cube,threshold):
     '''
     generathe the mask cube for the data cube, it check each slice in cube
     and select pixels whose value is beyond the threshold of its own slice
@@ -308,13 +306,12 @@ def Maskgenerator(data_cube,n_sig):
 
     # for each slice, generate a mask with the given threshold
     for data, mask in zip(data_cube,mask_cube):
-        threshold=np.mean(data)+n_sig*np.std(data)
         index_set=np.where(data>=threshold)
         mask[index_set]=1.
 
     return mask_cube
 
-def Maskgenerator2(data_cube,n_sigma):
+def Maskgenerator2(data_cuben,data_cubet,n_sigma):
     '''
     generate the mask cube, it check the spectra of each point, only select
     pixels whose value is beyond the threshold of this spectra
@@ -324,15 +321,15 @@ def Maskgenerator2(data_cube,n_sigma):
     '''
 
     #generate the mask cube
-    mask_shape = np.shape(data_cube)
+    mask_shape = np.shape(data_cuben)
     mask_cube = np.zeros(mask_shape)
 
     #check the spectra of each point and select the pixel satisfied the condition
     for i in range(mask_shape[1]):
         for j in range(mask_shape[2]):
-            spec_aver = np.mean(data_cube[:, i, j])
-            spec_std = np.std(data_cube[:, i, j])
-            index_set = np.where(data_cube[:, i, j] >= spec_aver + n_sigma * spec_std)
+            spec_aver = np.mean(data_cuben[:, i, j])
+            spec_std = np.std(data_cuben[:, i, j])
+            index_set = np.where(data_cubet[:, i, j] >= spec_aver + n_sigma * spec_std)
             mask_cube[index_set, i, j] += 1
 
     return mask_cube
@@ -359,7 +356,7 @@ def SNmapgenerator(fluxmap,wavelengthinterval,R,t):
     SNmap=photonmap/np.sqrt(photonmap)
     return SNmap
 
-def OptimalextractImg(datacube,mask_cube):
+def OptimalextractImg(datacube,mask_cube,axis=0):
     '''
     optimal extract the narrow band image
     :param datacube: data cube used to extract the narrow band image
@@ -368,8 +365,8 @@ def OptimalextractImg(datacube,mask_cube):
     '''
 
     mask_data=datacube*mask_cube
-    map=np.sum(mask_data,axis=0)
-    mask=np.sum(mask_cube,axis=0)
-    mask[np.where(mask == 0.)] = 1.
+    map=np.sum(mask_data,axis=axis)
+    mask=np.sum(mask_cube,axis=axis)
+    # mask[np.where(mask == 0.)] = 1.
     avermap = map / mask
     return avermap
