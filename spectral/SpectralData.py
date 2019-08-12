@@ -1,25 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pyspeckit
+from imag import ImgInterSmo
 from cube import CubeData
 from astropy import constants as const
 from astropy import units as u
+from scipy import stats
 
 '''
 This script used to access with the spectra
 '''
-
-
-def Spectral(cube, source_coordinate, wavelength):
-    '''
-    :param cube: cube data
-    :param source_coordinate: coordinate of the sources
-    :param wavelength: wavelength
-    :return: None
-    '''
-    spectral_set = SourceSpectral(cube, source_coordinate)
-    SpectralPlot(spectral_set, wavelength, source_coordinate)
-    return None
 
 def SourceSpectral(cube,ssize,position,ramap=None,decmap=None):
     '''
@@ -36,28 +26,6 @@ def SourceSpectral(cube,ssize,position,ramap=None,decmap=None):
     onedspectral=np.median(np.median(selected_region,axis=1),axis=1)
 
     return onedspectral
-
-def Mapspectral(fluxcube,ssize):
-    '''
-    generate t spectras for the whole datacube
-    :param fluxcube: datacube used to produce the spectra
-    :param ssize: size whin which to calculate the spectra
-    :return: spectra_list contains the spectra for each position
-    '''
-
-    width=int(np.shape(fluxcube)[1]/ssize[0])
-    length=int(np.shape(fluxcube)[2]/ssize[1])
-    spectral_list=[]
-    position_list=[]
-
-    #for each position, generate a spectra and put it into the spectra)list
-    for i in range(1,width):
-        for j in range(1,length):
-            position=[i*ssize[0],j*ssize[1]]
-            ondspectral=SourceSpectral(fluxcube,position=position,ssize=ssize)
-            spectral_list.append(ondspectral)
-            position_list.append(position)
-    return spectral_list,position_list
 
 def SpectralPlot(onedspectral, wavelength,wavecut=None,title=None):
     '''
@@ -169,4 +137,53 @@ def Specplotfit(filename,wavecut,fitmodel,guesses=None,rewave=None,position=None
     axis.set_ylabel('',fontsize=fontsize)
     axis.annotate(annotate,(-2050,1.1), fontsize=fontsize)
     axis.tick_params(labelsize=15.)
+    return None
 
+def Slitspectrum(datacube,maskcube,x,y,wavelengthrange,z,intrinsicwavelength,horizontal=True):
+    '''
+    extrat spectra from a long slit
+    :param datacube: IFU data
+    :param maskcube: maskcube
+    :param x: spatial axis of the long slit
+    :param y: spatial axis of the long slit
+    :param wavelengthrange: wavelength range of the spectra
+    :param z:redshift of the target source
+    :param intrinsicwavelength: intrinsic wavelength of the emission line
+    :param horizontal: direction of the long slit
+    if horizontal is True, then the long slit is horizontal
+    else vertical
+    :return: 2d long slit spectra
+    '''
+    if horizontal:
+        twodspec=CubeData.OptimalextractImg(datacube,maskcube,1)
+        spatial_axis=y
+    else:
+        twodspec=CubeData.OptimalextractImg(datacube,maskcube,2)
+        spatial_axis=x
+    velocityrange=wavelength2velocity(wavelengthrange,z,intrinsicwavelength)
+    return twodspec[:,::-1],velocityrange,spatial_axis
+
+def RegionSpectrum(datacube,maskcube=None):
+    '''
+    extract spectra from a small region
+    :param datacube: wait for spectra extraction
+    :param maskcube:
+    :return: extracted spectra
+    '''
+    if maskcube is None:
+        maskcube=np.ones(np.shape(datacube))
+    spec1=np.sum(np.sum(datacube,axis=1),axis=1)
+    mask1=np.sum(np.sum(maskcube,axis=1),axis=1)
+    mask1[np.where(mask1==0)]=1
+    return spec1/mask1
+
+def Specnoiseestor(spectra):
+    '''
+    estimate noise level of an array
+    :param spectra: input spectra
+    :return: noise standard deviation
+    '''
+    #use highpass filter to remove the signal and only
+    #noise left
+    noise = ImgInterSmo.NoiseFilter(spectra, 5, 0.1, 'highpass')
+    return np.std(noise)
