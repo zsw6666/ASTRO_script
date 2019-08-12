@@ -93,15 +93,18 @@ def Contourgenerator(handle=None,contourimg=None,wcs=None,levels=None,color=None
 
 def Gimgplot(fig=None,AX=None,imglist=None,x=None,y=None,
              contourmap=None,contourlevel=None,xlabel=None,
-             ylabel=None,cbarlabel=None,imgname=None):
-    fig.text(0.48, 0.01, xlabel, ha='center', fontsize=25.)
-    fig.text(0.008, 0.56, ylabel, va='center', rotation='vertical', fontsize=25.)
+             ylabel=None,cbarlabel=None,imgname=None,contourmark=None):
+    fig.text(0.48, 0.27, xlabel, ha='center', fontsize=25.)
+    fig.text(0.05, 0.6, ylabel, va='center', rotation='vertical', fontsize=25.)
     for i in range(len(AX)):
         img = AX[i].pcolor(x, y, imglist[i], cmap='gist_ncar')
-        con=AX[i].contour(x,y,contourmap,levels=contourlevel,colors='black')
-        AX[i].clabel(con, inline=1, fontsize=15.)
-        AX[i].text(-15, 7, imgname[i], fontsize=17.)
-        cbar = fig.colorbar(img, ax=AX[i], orientation="vertical",fraction=0.02)  #
+        if contourmark[i] is not None:
+            con=AX[i].contour(x,y,contourmap,levels=contourlevel,colors='black')
+            AX[i].clabel(con, inline=1, fontsize=15.)
+        if imgname is not None:
+            AX[i].text(-18, 7, imgname[i], fontsize=25.,color='red')
+        cbar = fig.colorbar(img, ax=AX[i], orientation="horizontal",aspect=20)  #
         cbar.set_label(cbarlabel[i], fontsize=25.)
         cbar.ax.tick_params(labelsize=15.)
         AX[i].tick_params(labelsize=15.)
+        # AX[i].set_aspect(1)
