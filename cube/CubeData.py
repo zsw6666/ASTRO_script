@@ -210,7 +210,7 @@ def Cubeweightstd(velocity=None,cube_velocity=None,mask_cube=None,velomap=None):
     velodispmap = np.sqrt(Cubeweightedmean(cube_velocity, velodisp, mask_cube))
     return velodispmap
 
-def Angle2distance(ra,dec,refpoint):
+def Angle2distance(ra,dec,refpoint,unit=u.arcsec):
     '''
     convert ra,dec to angle distance to the center of the image
     :param ra: ra
@@ -219,11 +219,11 @@ def Angle2distance(ra,dec,refpoint):
     '''
 
     ra,dec=ra.to(u.rad),dec.to(u.rad)
-    ra_dis,dec_dis=(ra-refpoint[0]*u.deg).to(u.arcsec),(dec-refpoint[1]*u.deg).to(u.arcsec)
+    ra_dis,dec_dis=(ra-refpoint[0]*u.deg).to(unit),(dec-refpoint[1]*u.deg).to(unit)
 
     return ra_dis,dec_dis
 
-def CubeNoiseFilter(cube,N=5,wn=.3):
+def CubeNoiseFilter(cube,N=5,wn=.3,mark='lowpass'):
     '''
     reduce the noise for the spectra of each pixel
     :param cube: datacube
@@ -233,12 +233,12 @@ def CubeNoiseFilter(cube,N=5,wn=.3):
     '''
 
     shape=np.shape(cube)
-
+    cube_filter=np.zeros(shape)
     #for each pixel reduce the noise
     for i in range(shape[1]):
         for j in range(shape[2]):
-            cube[:,i,j]=ImgInterSmo.NoiseFilter(cube[:,i,j],N,wn)
-    return cube
+            cube_filter[:,i,j]=ImgInterSmo.NoiseFilter(cube[:,i,j],N,wn,mark=mark)
+    return cube_filter
 
 def Cubeseeinglimit(cube,size=[6.,4.]):
     '''
@@ -313,13 +313,12 @@ def Maskgenerator(data_cube,threshold):
 
 def Maskgenerator2(data_cuben,data_cubet,n_sigma):
     '''
-    generate the mask cube, it check the spectra of each point, only select
-    pixels whose value is beyond the threshold of this spectra
-    :param data_cube: wait for mask
-    :param n_sigma: threshold
-    :return: mask cube
-    '''
 
+    :param data_cuben:
+    :param data_cubet:
+    :param n_sigma:
+    :return:
+    '''
     #generate the mask cube
     mask_shape = np.shape(data_cuben)
     mask_cube = np.zeros(mask_shape)
