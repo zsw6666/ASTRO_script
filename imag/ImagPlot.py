@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from astropy.visualization import ZScaleInterval,LinearStretch,ImageNormalize
 from mpl_toolkits.mplot3d import Axes3D
 from cube import CubeData
@@ -69,6 +70,7 @@ def Mapprepro(twodmap,x,y,internum):
     x, y = ImgInterSmo.Arrayinterpolation(x, internum)[1:-1], ImgInterSmo.Arrayinterpolation(y, internum)[1:-1]
     return twodmap,x,y
 
+
 def Threedplotimg(twodmap,x,y):
     X, Y = np.meshgrid(x, y)
     fig = plt.figure()
@@ -90,14 +92,17 @@ def Contourgenerator(handle=None,contourimg=None,wcs=None,levels=None,color=None
 
     return contour,handle
 
-
 def Gimgplot(fig=None,AX=None,imglist=None,x=None,y=None,
              contourmap=None,contourlevel=None,xlabel=None,
-             ylabel=None,cbarlabel=None,imgname=None,contourmark=None):
+             ylabel=None,cbarlabel=None,imgname=None,contourmark=None,cmap=['jet','gist_ncar']):
     fig.text(0.48, 0.27, xlabel, ha='center', fontsize=25.)
     fig.text(0.05, 0.6, ylabel, va='center', rotation='vertical', fontsize=25.)
+    cmap1=Userdefinecmap(['navy','blue','royalblue','deepskyblue','mediumspringgreen',
+                          'green','lawngreen','yellow','gold','orange','darkorange',
+                          'peru','orangered','red','darkred','maroon'],'midnightblue','crimson')
+    cmap=[cmap1]+cmap
     for i in range(len(AX)):
-        img = AX[i].pcolor(x, y, imglist[i], cmap='gist_ncar')
+        img = AX[i].pcolor(x, y, imglist[i], cmap=cmap[i])
         if contourmark[i] is not None:
             con=AX[i].contour(x,y,contourmap,levels=contourlevel,colors='black')
             AX[i].clabel(con, inline=1, fontsize=15.)
@@ -108,3 +113,11 @@ def Gimgplot(fig=None,AX=None,imglist=None,x=None,y=None,
         cbar.ax.tick_params(labelsize=15.)
         AX[i].tick_params(labelsize=15.)
         # AX[i].set_aspect(1)
+    return None
+
+def Userdefinecmap(color,cfirst,clast):
+
+    cmap = mpl.colors.ListedColormap(color)
+    cmap.set_over(cfirst)
+    cmap.set_under(clast)
+    return cmap
