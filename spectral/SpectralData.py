@@ -185,5 +185,5 @@ def Specnoiseestor(spectra):
     '''
     #use highpass filter to remove the signal and only
     #noise left
-    noise = ImgInterSmo.NoiseFilter(spectra, 5, 0.1, 'highpass')
-    return np.std(noise)
+    noisespec = ImgInterSmo.NoiseFilter(spectra, 5, 0.1, 'highpass')
+    return np.std(noisespec),noisespec
