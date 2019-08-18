@@ -46,19 +46,31 @@ def Curvefit(fitfunc,x,y,initpara=None):
     :param initpara: initial parameter input to fit function
     :return: fit parameter
     '''
-    popt, pcov = curve_fit(fitfunc, x, y, p0=initpara,method='lm',maxfev=60000)
+    popt, pcov = curve_fit(fitfunc, x, y, p0=initpara,method='lm',maxfev=100000)
     return x,popt
 
-def Peakfinder(x,height=None):
+def Peakfinder(x,height=None,prominence=None):
     '''
     find the peak of the data above a certain noise level
     :param x: data
     :param height: noise level beyond which we find peak
     :return: indecis of the peak in the data
     '''
-    return find_peaks(x,height)[0]
+    return find_peaks(x,height,prominence=prominence)[0]
 
-def GaussianParaestimator(x,y,noise):
+def Gaussiansigestimator(x,y,noise):
+    '''
+    estimate the initial sigma for gaussian function
+    :param x: independent variable
+    :param y: dependent variable
+    :param noise: noise level which we use as threshold to
+    select the peak
+    :return: initial sigma
+    '''
+    x_filter=x[np.where(y>=noise)]
+    return np.std(x_filter)
+
+def GaussianParaestimator(x,y,noise,prominence):
     '''
     estimate the initial parameter of the gaussian function
     :param x: independent variable
@@ -71,11 +83,12 @@ def GaussianParaestimator(x,y,noise):
     #amplitude of gaussian function
     #using its x position as the center
     #the default sigma use the value of 100 km/s
-    peak_indecis = Peakfinder(y, height=4 * noise)
-    para=[[y[i],x[i],100] for i in peak_indecis]
+    peak_indecis = Peakfinder(y, height= noise,prominence=prominence)
+    sigma=[Gaussiansigestimator(x[i-10:i+10],y[i-10:i+10],noise) for i in peak_indecis]
+    para=[[y[peak_indecis[i]],x[peak_indecis[i]],sigma[i]] for i in range(len(peak_indecis))]
     return np.array(para).flatten()
 
-def Gaussianfit(x,y_init,noise):
+def Gaussianfit(x,y_init,noise,prominence):
     '''
     fit data with multi-gaussian function
     :param x: independent variable
@@ -86,11 +99,11 @@ def Gaussianfit(x,y_init,noise):
     y=y_init.copy()
 
     #estimate the initial parameter
-    initpara = GaussianParaestimator(x, y, noise)
+    initpara = GaussianParaestimator(x, y, noise,prominence=prominence)
 
     #remove the noise
-    y[np.where(y<3*noise)]=.2*noise
-    y[-5:]=.2*noise
+    y[np.where(y<.95*noise)]=0.#5*noise
+    y[-5:]=0.#.8*noise
     #fit the data and apply the fit paramter to function
     #to calculate the model data
     _, popt = Curvefit(Multigaussian(int(len(initpara) / 3)), x,
