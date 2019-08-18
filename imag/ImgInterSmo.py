@@ -112,7 +112,7 @@ def Imgnan(img):
     counts = np.isnan(img).sum()
     return (counts/np.size(img))<=0.4
 
-def Isarraysignificance(array,noise):
+def Isarraysignificance(array_signal,array_noise):
     '''
 
     :param array: data
@@ -120,6 +120,15 @@ def Isarraysignificance(array,noise):
     :return: find it there's quantities of abnormal value
     in the array, if it's true return true else return false
     '''
-    sigpoint=array[np.where(array>3*noise)]
-    return len(sigpoint)/len(array)>.25
+    sigma_signal=np.std(array_signal)
+    sigma_noise=np.std(array_noise)
+
+    #check if there're significant peak in  the array
+    #first counts if there're enough cells whose value is
+    #beyond 3*sigma of noise, then compare the standard deviation
+    #of signal array and noise array.
+    mark1=sigma_signal>3.*sigma_noise#lyman:3,Heii: 2,CIV: 1.65
+    mark2=(len(array_signal[np.where(array_signal>=3*sigma_noise)])>.25*len(array_signal))#lyman:.25, Heii:.2, CIV: .15
+    mark=(mark1 and mark2)
+    return mark
 
