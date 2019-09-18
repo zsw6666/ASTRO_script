@@ -8,6 +8,7 @@ from astropy import units as u
 import numpy as np
 import IO
 import matplotlib.gridspec as grs
+import Cosmology
 
 
 def Cubepre(path,cubename):
@@ -124,24 +125,24 @@ def Specmap(velocube,maskcube,velomap,dec_dis,ra_dis,velocityrange
                 continue
     #plot the spectra
     fig1, AX1 = plt.subplots(1)
-    img = AX1.pcolor(dec_dis, ra_dis, velomap, cmap='gist_ncar')
+    img = AX1.pcolor(dec_dis, ra_dis, velomap, cmap='jet')
     cbar = fig1.colorbar(img, ax=AX1, orientation="vertical", aspect=20)
-    AX1.set_xlabel('arcsec', fontsize=15)
-    AX1.set_ylabel('arcsec', fontsize=15)
+    AX1.set_xlabel('$\Delta$y(kpc)', fontsize=15)
+    AX1.set_ylabel('$\Delta$x(kpc)', fontsize=15)
     cbar.set_label('velocity(km/s)', fontsize=25.)
     cbar.ax.tick_params(labelsize=15.)
 
-    fig2,AX=plt.subplots(7,3,sharex=True)
+    fig2,AX=plt.subplots(3,3,sharex=True)
     AX=AX.flatten()
     for i in range(len(AX)):
         ax = AX[i]
         if i<len(speclist):
             v=np.sum(modellist[i]*velocityrange)/np.sum(modellist[i])
-            rect = pth.Rectangle((declist[i], ralist[i]), 2, 2,
+            rect = pth.Rectangle((declist[i], ralist[i]), 18, 18,
                                  linewidth=1, edgecolor='black', facecolor='none')
             AX1.add_patch(rect)
             AX1.text(declist[i], ralist[i],str(i))
-            AX1.text(declist[i]+.7, ralist[i]+.7, str(int(v)))
+            AX1.text(declist[i]+7, ralist[i]+7, str(int(paralist[i][2])))
             ax.step(velocityrange,speclist[i])
             ax.plot(velocityrange, modellist[i])
             ax.vlines(0., ymax=np.max(speclist[i]),
@@ -150,25 +151,52 @@ def Specmap(velocube,maskcube,velomap,dec_dis,ra_dis,velocityrange
             ax.vlines(v,ymax=np.max(speclist[i]),
                       ymin=np.min(speclist[i]),
                       linestyles='dashed',colors='gray')
-            ax.hlines(3.*noiselist[i],xmax=np.max(velocityrange),
+            ax.hlines(1.*noiselist[i],xmax=np.max(velocityrange),
                       xmin=np.min(velocityrange),
                       linestyles='dashed',colors='red')
             ax.title.set_text('v:'+str(int(v))+'km/s  '+
                               '$\sigma$:'+str(int(paralist[i][2])) + 'km/s')
-            ax.text(-2000,0.8*np.max(speclist[i]),str(i))
+            ax.text(-1000,0.8*np.max(speclist[i]),str(i))
         else:
             ax.axis('off')
     fig2.text(0.5, 0.05, 'velocity(km/s)', ha='center', fontsize=15.)
     fig2.text(0.05, 0.5, 'Intensity($10^{-19} erg/s/cm^{2}/\AA$)',
               va='center', rotation='vertical', fontsize=15.)
     plt.subplots_adjust(hspace=.35)
-    plt.show()
+    return AX,AX1
 
+def Imgmap(datacube,maskcube,interval_size,wavelengthrange,
+           z=2.308,intrinsicwavelength=1215.673):
+    '''
+    do optimal extraction for the input datacube and generate a series of
+    psudo nb image within the velocity range and with fix interval size
+    :param datacube: input data cube
+    :param maskcube: mask cube
+    :param interval_size: velocity size for each psudo nb image, in wavelngth unit
+    :param velocityrange: total wavelength range
+    :param dec: dec coordiante
+    :param ra: ra coordinate
+    :return:  a series of psudo nb image array
+    '''
+    velocityrange = SpectralData.wavelength2velocity(wavelengthrange, z, intrinsicwavelength)/1e3
+    cube_shape=np.shape(datacube)
+    img_list=[]
+    slices_velo_list=[]
+    for i in range(0,len(datacube),int(2*interval_size)):
+        img_array=CubeData.OptimalextractImg(datacube[i:i+int(2*interval_size),:,:],
+                                   maskcube[i:i + int(2 * interval_size), :, :])
+        img_array[:, :int(0.15 * cube_shape[0])] = np.nan
+        img_array[:, -1 - int(0.07 * cube_shape[0]):] = np.nan
+        img_array[:int(0.1 * cube_shape[0]), :] = np.nan
+        img_array[-1 - int(0.1 * cube_shape[0]):, :] = np.nan
+        slices_velo=np.mean(velocityrange[i:i+int(2*interval_size)])
 
+        slices_velo_list.append(slices_velo)
+        img_list.append(img_array)
+    return img_list,slices_velo_list
 
-
-
-def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.],wavelengthcut_conti=[4123,4269],internum=None,smoothmark=None):
+def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.],
+            wavelengthcut_conti=[4123,4269],internum=None,smoothmark=None):
     '''
     plot the 2D image for a selected wavelength interval
     :param wavelengthcut: wavelength interval
@@ -176,19 +204,16 @@ def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.],wavelengthcut_co
     '''
 
     #read the datacube
-    flux, wavelength ,wcs= Cubepre(path, filename)
+    flux, wavelength ,RA,DEC= Cubepre(path, filename)
     # flux=CubeData.Cubebadpixelremovor(flux)
-    RA,DEC=CubeData.WCS(wcs)
     wavelengthcut=np.array(wavelengthcut)
 
     #generate the 2D image
-    twodimg,dec,ra=ImagPlot.Cutmap(flux.value,wavelength.value,wavelengthcut,DEC.value,RA.value)
+    twodimg,DEC,RA=ImagPlot.Cutmap(flux.value,wavelength.value,wavelengthcut,DEC.value,RA.value)
 
     #subtract the continuum component
     if wavelengthcut_conti is not None:
-        twodimg_conti, _, _ = ImagPlot.Cutmap(flux.value, wavelength.value, wavelengthcut_conti, DEC.value, RA.value)
-        twodimg_conti = twodimg_conti * (
-                    (wavelengthcut[1] - wavelengthcut[0]) / (wavelengthcut_conti[1] - wavelengthcut_conti[0]))
+        twodimg_conti, _, _ = ImagPlot.Cutmap(flux.value, wavelength.value, wavelengthcut_conti, DEC, RA)
         twodimg=twodimg-twodimg_conti
 
     #interpolate and smooth
@@ -198,9 +223,10 @@ def Indiimg(path=None,filename=None,wavelengthcut=[4020.,4028.],wavelengthcut_co
         twodimg=ImgInterSmo.Arrayinterpolation(twodimg,internum)
 
 
-    return twodimg,ra,dec
+    return twodimg*1e19
 
-def Indiimgreadout(path=None,filename=None,waveinterval=None,wavelengthcut_conti=None,name=None,interpara=None,smoothpara=None):
+def Indiimgreadout(path=None,filename=None,waveinterval=None,wavelengthcut_conti=None,
+                   name=None,interpara=None,smoothpara=None):
     '''
     generate the fits file
     :param waveinterval: wavelength interval selected from the datacube
@@ -209,7 +235,9 @@ def Indiimgreadout(path=None,filename=None,waveinterval=None,wavelengthcut_conti
     '''
 
     #generate the image of the selected wavelength interval
-    twodimg,ra,dec=Indiimg(path=path,filename=filename,wavelengthcut=waveinterval,wavelengthcut_conti=wavelengthcut_conti,internum=interpara,smoothmark=smoothpara)
+    twodimg,ra,dec=Indiimg(path=path,filename=filename,wavelengthcut=waveinterval,
+                           wavelengthcut_conti=wavelengthcut_conti,internum=interpara,
+                           smoothmark=smoothpara)
 
     #read the header
     header=CubeData.Readheader(path,filename)
@@ -244,76 +272,60 @@ def SingleContour(baseimgname,contouimgname,levels=None,col='red'):
     cbar=plt.colorbar()
     cbar.set_label(r'$velocity (km/s) $')
 
-def contouroverlay():
-    hstimg,hstheader,hstwcs=IO.Accessfits('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammothicut.fits',0)
-    baseimg= np.full(np.shape(hstimg), np.nan)
-    lymanimg,lyheader,lywcs=IO.Accessfits('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/lyman.fits')
-    lysourceimg,_,_=IO.Accessfits('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/lyman_source2.fits')
-    lywcs=lywcs.dropaxis(2)
-    heiiimg,heheader,hewcs=IO.Accessfits('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/heii.fits')
-    heiiwcs=hewcs.dropaxis(2)
-    civimg,civheader,civwcs=IO.Accessfits('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/civ.fits')
-    civwcs=civwcs.dropaxis(2)
-    coaimg,coaheader,coawcs=IO.Accessfits("/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galA.fits")
-    coawcs=coawcs.dropaxis(2)
-    cobimg, cobheader, cobwcs = IO.Accessfits(
-        "/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galB.fits")
-    cobwcs = cobwcs.dropaxis(2)
-    cocimg, cocheader, cocwcs = IO.Accessfits(
-        "/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galC.fits")
-    cocwcs = cocwcs.dropaxis(2)
-    codimg, codheader, codwcs = IO.Accessfits(
-        "/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/mammoth-1_HST_NB_CO/mammoth_CO_1-0/mammoth.galD.fits")
-    codwcs = codwcs.dropaxis(2)
+def contouroverlay(baseimgname,contourimgname,xlabel,ylabel,conlabel,baseext=0,contourext=0,
+                   contourstd=2e-18,contourlevel=None):
+    '''
+    overlay contour on the base image
+    :param baseimgname: name of base image
+    :param baseext: extension number of base image
+    :param contourimgname: name of contour image
+    :param contourext: extension number of contour image
+    :return: img
+    '''
 
-    norm=ImagPlot.Scaleimgconverter(hstimg)
-    ax=plt.subplot(projection=hstwcs)
+    baseimg,baseheader,basewcs=IO.Accessfits(baseimgname,baseext)
+    contourimg,contourheader,contourwcs=IO.Accessfits(contourimgname,contourext)
+    contourwcs=contourwcs.dropaxis(2)
+    norm=ImagPlot.Scaleimgconverter(baseimg,interval='manual')
+    ax=plt.subplot(projection=basewcs)
+    ax.imshow(baseimg, norm=norm)
+    ax.tick_params(labelsize=15.)
+    contour = plt.contour(contourimg, transform=ax.get_transform(contourwcs),
+                         levels=np.array(contourlevel)*contourstd, linewidths=1.,colors='white')
 
-    # extract the contours and overlay them on the base image
-    contourlyman,ax= ImagPlot.Contourgenerator(ax, lymanimg, lywcs,[1.e-17,4.1667e-17,7.1334e-17,9.11001e-17],'red')#
-    contoursource, ax = ImagPlot.Contourgenerator(ax, lysourceimg, lywcs, [2.78194e-19,4.29945e-19,5.11695e-19,5.93445e-19 ],
-                                                 'darkorange')  #
-    contourheii,ax = ImagPlot.Contourgenerator(ax, heiiimg, heiiwcs,[4.e-18,9.23278e-18,1.1e-17,2.e-17,3.e-17],'cyan')#
-    contourciv,ax = ImagPlot.Contourgenerator(ax, civimg, civwcs,[4.e-18,1.0025e-17,1.305e-17,1.6075e-17,1.91e-17], 'lime')#
-    contourco1,ax=ImagPlot.Contourgenerator(ax,coaimg[0],coawcs,[0.0123874,0.0155811,
-                                                      0.0187747,0.0219684,0.0251621],'white')#[0.006,0.00919368,0.0123874,0.0155811,0.0187747,0.0219684,0.0251621]
-    contourco2,ax = ImagPlot.Contourgenerator(ax, cobimg[0], cobwcs,
-                                   [0.00817988,0.0118598,0.0155396,0.0192195], 'white')#[0.0045,0.00817988,0.0118598,0.0155396,0.0192195]
-    contourco3,ax = ImagPlot.Contourgenerator(ax, cocimg[0], cocwcs,
-                                   [0.00697652,0.00995303,0.0129295,0.0159061], 'white')#[0.004,0.00697652,0.00995303,0.0129295,0.0159061]
-    contourc04,ax = ImagPlot.Contourgenerator(ax, codimg[0], codwcs,
-                                   [0.007,0.0100019,0.0130039], 'white')
+    lines = [contour.collections[0]];labels=[conlabel]
+    plt.legend(lines,labels,fontsize=25)
+    plt.xlabel(xlabel,fontsize=20.)
+    plt.ylabel(ylabel,fontsize=20.)
 
-    ax.imshow(hstimg,norm=norm,cmap='gray')
-    # plt.tight_layout(rect=[0,0,.92,1])
-    plt.subplots_adjust(left=0.05, right=0.99, top=0.95, bottom=0.1)
-    lines=[contourlyman.collections[0],contoursource.collections[0],contourheii.collections[0],contourciv.collections[0],contourco1.collections[0]]
-    labels=['$Lyman\alpha$','Source','$HeII$','$CIV$','$CO(1-0)$']
-    plt.legend(lines,labels)
-    plt.xlabel(r'$Right Ascension$')
-    plt.ylabel(r'$declination$')
-    plt.show()
-    return None
-
-
-def velopre(flux,wavelength,ra,dec,waveinterval=[4010.,4050.],internum=None,mask_sig1=1.,mask_sig2=2.):
+    return ax,contour
+def velopre(flux,wavelength,ra,dec,waveinterval=[4010.,4050.],z=2.308,
+            conti_interval=None,internum=None,mask_sig1=1.,mask_sig2=2.,consub=True,
+            coordinate_wcs=True):
 
     waveinterval = np.array(waveinterval)
-
+    if conti_interval is None:
+        conti_interval=waveinterval-(waveinterval[1] - waveinterval[0])
+    else:
+        conti_interval=np.array(conti_interval)
     # convert ra,dec to angle distance from the mammoth-1 source
-    ra_dis, dec_dis = CubeData.Angle2distance(ra, dec, [0,0],unit=u.deg)#220.3519792, 40.052625
+    if coordinate_wcs:
+        ra_dis, dec_dis = CubeData.Coord2angledis(ra, dec, [0,0],unit=u.deg)
+    else:
+        ra_dis, dec_dis = CubeData.Coord2angledis(ra, dec, [220.3519792, 40.052625])
+        ra_dis,dec_dis=CubeData.Angledis2comovindis(ra_dis,dec_dis,z)
     ra_dis, dec_dis = ra_dis.value, dec_dis.value
 
     # cut the datacube along the axis of wavelength, only keep the cube within the waveinterval
     rangeflux, rangewavelength = CubeData.CubeCut(flux.value, wavelength.value, 'manual', waveinterval)
     badflux, _ = CubeData.CubeCut(flux.value, wavelength.value, 'manual', waveinterval - 100)
-    continumflux, _ = CubeData.CubeCut(flux.value, wavelength.value, 'manual',
-                                       waveinterval - (waveinterval[1] - waveinterval[0]))
+    continumflux, _ = CubeData.CubeCut(flux.value, wavelength.value, 'manual',conti_interval)
 
     # subtract continuum component, remove bad pixels
-    rangeflux_subtracted = CubeData.Continumsubtractor(continumflux, rangeflux)
-    mask_threshold = CubeData.ThresholdEstimator(badflux[:, 50:60, 4:12],mask_sig1)
-    # rangeflux_badpix=rangeflux_subtracted
+    if consub:
+        rangeflux_subtracted = CubeData.Continumsubtractor(continumflux, rangeflux)
+    else:
+        rangeflux_subtracted=rangeflux
 
 
     if internum is not None:
@@ -329,10 +341,9 @@ def velopre(flux,wavelength,ra,dec,waveinterval=[4010.,4050.],internum=None,mask
     cube1=CubeData.CubeNoiseFilter(cube_velocity,5,.1,'highpass')
     cube_velocity=CubeData.CubeNoiseFilter(cube_velocity, 5, .3)
 
-    mask_cube=CubeData.Maskgenerator2(cube1,cube_velocity,mask_sig2)
-    mask_cube1=CubeData.Maskgenerator(cube_velocity,mask_threshold)
+    mask_cube=CubeData.Maskgenerator2(cube_velocity,cube1,mask_sig2)
+    mask_cube1=CubeData.Maskgenerator(cube_velocity,cube1,mask_sig2)
     return cube_velocity,mask_cube,mask_cube1,rangewavelength,ra_dis,dec_dis,cube1
-
 
 def velocitymap(cube_velocity,mask_cube,rangewavelength,ra_dis,dec_dis,z=2.3093,lamda0=None):
     '''
@@ -366,7 +377,6 @@ def velocitymap(cube_velocity,mask_cube,rangewavelength,ra_dis,dec_dis,z=2.3093,
 
     return velomap,velodispmap,fluxmap,ra_dis,dec_dis
 
-
 def velocitymap_filter(cube_velocity,mask_cube,rangewavelength,ra_dis,dec_dis,
                        z=2.3093,lamda0=None,waveinterval=[3990.,4060.],
                        sigma_num=0.25):
@@ -389,29 +399,32 @@ def velocitymap_filter(cube_velocity,mask_cube,rangewavelength,ra_dis,dec_dis,
 
     # do the filter, only keep the pixels we need
     velomap_filtered=CubeData.Regionfilter(SNmap,velomap,sigma_num)
+    velomap_filtered=velomap
     velo_shape=np.shape(velomap_filtered)
 
 
-    if lamda0==1215.673:
-        #for lyman-alpha
-        velomap_filtered[:,:int(0.15*velo_shape[0])]=np.nan
-        velomap_filtered[:,-1-int(0.07*velo_shape[0]):]=np.nan
-        velomap_filtered[:int(0.1*velo_shape[0]),:]=np.nan
-        velomap_filtered[-1-int(0.1 * velo_shape[0]):, :] = np.nan
-    elif lamda0==1640:
-        # for heii
-        velomap_filtered[:, :int(0.65 * velo_shape[0])] = np.nan
-        velomap_filtered[:, -1 - int(0.2 * velo_shape[0]):] = np.nan
-        velomap_filtered[:int(0.3 * velo_shape[0]), :] = np.nan
-        velomap_filtered[-1 - int(0.15 * velo_shape[0]):, :] = np.nan
-    else:
-        #for civ
-        velomap_filtered[:, :int(0.5 * velo_shape[0])] = np.nan
-        velomap_filtered[:, -1 - int(0.2 * velo_shape[0]):] = np.nan
-        velomap_filtered[:int(0.33 * velo_shape[0]), :] = np.nan
-        velomap_filtered[-1 - int(0.2 * velo_shape[0]):, :] = np.nan
+    # if lamda0==1215.673:
+    #     #for lyman-alpha
+    #     velomap_filtered[:,:int(0.15*velo_shape[0])]=np.nan
+    #     velomap_filtered[:,-1-int(0.07*velo_shape[0]):]=np.nan
+    #     velomap_filtered[:int(0.1*velo_shape[0]),:]=np.nan
+    #     velomap_filtered[-1-int(0.1 * velo_shape[0]):, :] = np.nan
+    # elif lamda0==1640:
+    #     # for heii
+    #     velomap_filtered[:, :int(0.65 * velo_shape[0])] = np.nan
+    #     velomap_filtered[:, -1 - int(0.2 * velo_shape[0]):] = np.nan
+    #     velomap_filtered[:int(0.3 * velo_shape[0]), :] = np.nan
+    #     velomap_filtered[-1 - int(0.15 * velo_shape[0]):, :] = np.nan
+    # else:
+    #     #for civ
+    #     velomap_filtered[:, :int(0.5 * velo_shape[0])] = np.nan
+    #     velomap_filtered[:, -1 - int(0.2 * velo_shape[0]):] = np.nan
+    #     velomap_filtered[:int(0.33 * velo_shape[0]), :] = np.nan
+    #     velomap_filtered[-1 - int(0.2 * velo_shape[0]):, :] = np.nan
     velodisp[np.where(np.isnan(velomap_filtered))]=np.nan
-    fluxmap[np.where(np.isnan(velomap_filtered))]=np.nan
+    fluxmap[np.where(np.isnan(velomap_filtered))]=0.
+
+
 
 
 
@@ -454,7 +467,7 @@ def OptimalExtractimg(path=None,filename=None,waveinterval=[4010.,4050.],continu
 
     # convert ra,dec to angle distance from the mammoth-1 source
     ra, dec, = CubeData.WCS(wcs)
-    ra_dis, dec_dis = CubeData.Angle2distance(ra, dec, [220.3522, 40.0522])
+    ra_dis, dec_dis = CubeData.Coord2angledis(ra, dec, [0,0],unit=u.deg)#220.3522, 40.0522
     ra_dis, dec_dis = ra_dis.value, dec_dis.value
 
     # cut the datacube along the axis of wavelength, only keep the cube within the waveinterval
@@ -485,27 +498,29 @@ def OptimalExtractimg(path=None,filename=None,waveinterval=[4010.,4050.],continu
     return img_filtered,ra_dis,dec_dis
 
 # def RegionSpec()
-def Sourcemark(AX,sourcecoordinatelist,sourcenamelist):
+def Sourcemark(AX,sourcecoordinatelist,sourcenamelist,referecepoint=None,z=2.310):
 
+    sourcecoordinatelist=np.array(sourcecoordinatelist)
+    if referecepoint is not None:
+        sourcecoordinatelist=((((sourcecoordinatelist-referecepoint)*u.deg).to(u.rad)).value)
+        sourcecoordinatelist=(sourcecoordinatelist*Cosmology.Angle_distance(z)).to(u.kpc).value
     for i in range(len(AX)):
         for j in range(len(sourcecoordinatelist)):
             AX[i].scatter(sourcecoordinatelist[j][0], sourcecoordinatelist[j][1],
-                          marker='*', s=100., color='fuchsia')
+                          marker='+', s=180.,linewidth=2.3, color='black')
             if i == 0:
-                AX[i].text(sourcecoordinatelist[j][0] + .0001,
-                           sourcecoordinatelist[j][1] + .0001,
-                           sourcenamelist[j], color='fuchsia',
+                AX[i].text(sourcecoordinatelist[j][0] + 2.,
+                           sourcecoordinatelist[j][1] + 2.,
+                           sourcenamelist[j], color='red',
                            fontsize=15.)
     return None
 
-
-def Run():
-    # Indispectral([220.3491,40.0525])
-    # Indiimg(mark='2')
-    #
-    # #check the wavelength calibration of this two data cube
-    #
-    #read the cube data, extract the spectra from it and also smooth the spectra
+def Run_sky():
+    '''
+    check the wavelength calibration of this two data cube
+    :return: None
+    '''
+    # read the cube data, extract the spectra from it and also smooth the spectra
     # spectra1,wavelength1=Indispectral(path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/MMAMOTH1/MAMMOHT-1_individual',
     #                                   filename='1441+4003_00136_icubes_cut.fits',size=[20,10],
     #                                   position=[220.3499625,40.04884167],cutinterval=[3600.,4300.],normalize=True)
@@ -544,6 +559,261 @@ def Run():
     # fig.text(0.5, 0.03, 'Wavelength($\AA$)', ha='center', fontsize=25.)
     # fig.text(0.05, 0.5, 'Normalized Intensity', va='center', rotation='vertical', fontsize=25.)
     # plt.show()
+    return None
+
+def Run_rawimg():
+    '''
+    plot raw image of the three emission line
+    :return: None
+    '''
+
+    fluxss, wavelengthss, rass, decss = Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',
+                                                '1441+4003_comb_ss_icubes.fits')
+
+    fluxpfs, wavelengthpfs, rapfs, decpfs = Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',
+                                                    '1441+4003_comb_psfs_icubes.fits')
+    ra,dec=CubeData.Coord2angledis(rass,decss,[220.3519792, 40.052625],u.arcsec)
+    ra_dis, dec_dis = CubeData.Angledis2comovindis(ra, dec, 2.310)
+    ra_dis, dec_dis=ra_dis.value,dec_dis.value
+
+    interval_list=[[3990,4060],[5459.,5498.],[5160.,5200.]]
+    contiinterval_list=[[3800,3850],[5409.,5427.],[5141,5159]]
+    img_list,wavecut_list=[],[]
+    img_name=['Lyman','HeII','CIV']
+    path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI'
+    filename_list=['1441+4003_comb_ss_icubes.fits',
+                   '1441+4003_comb_psfs_icubes.fits',
+                   '1441+4003_comb_psfs_icubes.fits']
+    for i in range(len(filename_list)):
+        img=Indiimg(path,filename_list[i],wavelengthcut=interval_list[i],
+                    wavelengthcut_conti=contiinterval_list[i],
+                    internum=None,smoothmark='smooth')
+        img_list.append(img)
+
+    for i in range(len(img_list)):
+        fig,ax=plt.subplots(1,1)
+        img=ax.pcolor(dec_dis,ra_dis,img_list[i])
+        circle = pth.Rectangle((3.5, -10), 10,10,linewidth=1,
+                            edgecolor='red', facecolor='none')
+        ax.add_patch(circle)
+        plt.vlines(2,-130,75,linestyles='dashed',colors='red')
+        plt.vlines(15, -130, 75, linestyles='dashed',colors='red')
+        ax.text(-150, 60, img_name[i], fontsize=25., color='red')
+        cbar = fig.colorbar(img, ax=ax, orientation="vertical", aspect=20)  #
+        cbar.set_label('$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$', fontsize=25.)
+        cbar.ax.tick_params(labelsize=15.)
+        ax.tick_params(labelsize=15.)
+        plt.xlabel('$\Delta$x(kpc)',fontsize=20)
+        plt.ylabel('$\Delta$y(kpc)',fontsize=20)
+        plt.show()
+
+
+
+    return None
+
+def Run_spectrum():
+    '''
+    plot 1d and 2d spectrum
+    :return:
+    '''
+
+    fluxss, wavelengthss, rass, decss = Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',
+                                                '1441+4003_comb_ss_icubes.fits')
+
+    fluxpfs, wavelengthpfs, rapfs, decpfs = Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',
+                                                    '1441+4003_comb_psfs_icubes.fits')
+    ra, dec = CubeData.Coord2angledis(rass, decss, [220.3519792, 40.052625], u.arcsec)
+    ra_dis, dec_dis = CubeData.Angledis2comovindis(ra, dec, 2.310)
+    ra_dis, dec_dis = ra_dis.value, dec_dis.value
+    ra_c,dec_c=CubeData.Findposition(ra_dis,dec_dis,[-7, 0],ra_min=5,dec_min=5)
+    interval_list=[[3980,4070],[5439,5518],[5100,5260]]
+    flux_list=[fluxss.value,fluxpfs.value,fluxpfs.value]
+    wave_list=[wavelengthss.value,wavelengthpfs.value,wavelengthpfs.value]
+    name_list=['Lyman','HeII','CIV']
+    for i in range(3):
+        cube,wave=CubeData.CubeCut(flux_list[i],wave_list[i],'manual',interval_list[i])
+        cube_patch=cube[:,ra_c-1:ra_c+2,dec_c:dec_c+1]
+        spec=SpectralData.RegionSpectrum(cube_patch)
+        noise, specn = SpectralData.Specnoiseestor(spec)
+        spec_filterd = ImgInterSmo.NoiseFilter(spec, 2, 0.2, 'lowpass')
+        spec_fit,para=statistic.Gaussianfit(wave,spec_filterd,2.5*noise,None)
+
+
+        cube_slit=cube[:,:,dec_c:dec_c+1]
+        tspec,_,spatial_axis=SpectralData.Slitspectrum(cube_slit,None,dec_dis,ra_dis,wave,2.3,4000,False)
+        tspec=np.transpose(tspec)[::-1,:]
+
+        fig,AX=plt.subplots(2,1)
+        AX=AX.flatten()
+        AX[0].step(wave,spec*1e19)
+        AX[0].plot(wave, spec_fit * 1e19)
+        AX[0].step(wave,specn*1e19,'gray')
+        AX[0].set_ylabel('$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$',fontsize=20.)
+        img=AX[1].pcolor(wave,spatial_axis[:-1],tspec[:-1,:]*1e19,cmap='jet')
+        AX[1].set_ylabel('$\Delta$y(kpc)',fontsize=20.)
+        AX[1].set_xlabel('wavelength($\AA$)',fontsize=20.)
+        AX[0].tick_params(labelsize=15.)
+        AX[1].tick_params(labelsize=15.)
+        AX[0].text(interval_list[i][0]+5,np.max(spec*1e19)*.9,name_list[i],color='red',fontsize=25.)
+        AX[0].text(interval_list[i][1] - 16, np.max(spec * 1e19) * .9,'$\lambda$:'+str(int(para[1]))+'$\AA$' ,
+                   color='black', fontsize=20.)
+        cbaxes = fig.add_axes([0.91, 0.1, 0.02, 0.35])
+        cbar=plt.colorbar(img,ax=AX[1],cax=cbaxes)
+        cbar.set_label('$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$', fontsize=20.)
+        plt.show()
+
+
+
+
+    return None
+
+
+
+def Run_velo():
+    SN_sig = 1.
+    fluxss, wavelengthss, rass, decss = Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',
+                                                '1441+4003_comb_ss_icubes.fits')
+    cube1, maskcube2, maskcube1, wavelength1, ra_dis1, dec_dis1, cuben = velopre(fluxss, wavelengthss, rass, decss,
+                                                                                 [3990, 4060],
+                                                                                 internum=[2, 8],
+                                                                                 mask_sig2=3., consub=True,
+                                                                                 coordinate_wcs=False)  # [3990,4060],[4010,4035]
+
+    lymanvelomap, lymandisp, lymanimg, lymanSN, ra_dis, dec_dis = velocitymap_filter(cube1, [maskcube2, maskcube1],
+                                                                                     wavelength1, ra_dis1, dec_dis1,
+                                                                                     z=2.308,
+                                                                                     lamda0=1215.673,
+                                                                                     waveinterval=[3990., 4060],
+                                                                                     sigma_num=SN_sig)  # .18
+    lymanimg = lymanimg * 1e19
+    # maskcube2 = np.ones(np.shape(cube1))
+    # velocityrange=SpectralData.wavelength2velocity(wavelength1,2.308,1215.673)/1e3
+    # cube1,maskcube2=cube1[:,10:-10,10:-10],maskcube2[:,10:-10,10:-10]
+    # ra_dis,dec_dis=ra_dis[10:-10],dec_dis[10:-10]
+    # lymanvelomap = lymanvelomap[10:-10, 10:-10]
+    # lymandisp = lymandisp[10:-10, 10:-10] #* 2.36
+    # AX,AX1=Specmap(cube1,maskcube2,lymanvelomap,dec_dis,ra_dis,velocityrange)
+    fig = plt.figure(constrained_layout=False)
+    gs = grs.GridSpec(1, 3, fig)
+    AX = [fig.add_subplot(gs[i]) for i in range(3)]
+    imglist = [lymanimg, lymanvelomap, lymandisp]
+    cbarlabel = ['$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$', r'$velocity(km/s)$', r'$velocity(km/s)$']
+    ImagPlot.Gimgplot(fig, AX, imglist, dec_dis, ra_dis, lymanimg, [2, 4.5, 7.7, 11.8, 17],  '$\Delta$x(kpc)','$\Delta$y(kpc)',
+                      cbarlabel, ['Lyman', 'velocity', 'dispersion'], contourmark=[True, None, None])
+
+    # mask_datacube=cube1*maskcube2
+    # maskcube3=CubeData.Maskgenerator3(mask_datacube,cuben,.7)
+    # img_list,velo_list=Imgmap(cube1*1e19,maskcube3,3,wavelength1)
+    #
+    # fig,AX=ImagPlot.Mapimgplot(img_list,velo_list,dec_dis1,ra_dis1,'DEC','RA',
+    #                         '$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$')
+    Sourcemark(AX, sourcecoordinatelist=[[40.05268589,220.3520946],[40.05221366,220.3519858],
+                                         [40.05297755,220.3520401],[40.05222735,220.3493004],
+                                         [40.0534915,220.3529473],[40.05224151,220.3531833],
+                                         [40.04747144,220.3524812],[40.0535024,220.349928],
+                                         [40.05106072,220.3497904]],
+                   sourcenamelist=['', '', '', '', '',
+                                   '','','',''], referecepoint=[40.052625,220.3519792])
+    # plt.subplots_adjust(wspace=0, hspace=0)
+    plt.show()
+
+    # fluxpfs, wavelengthpfs, rapfs, decpfs = Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',
+    #                                                 '1441+4003_comb_psfs_icubes.fits')
+    # SN_sig = 3.8
+    # mask_sig1 = SN_sig / 25.
+    # cubeheii, maskcubeheii, maskcubeheii2, wavelengthheii, ra_dis, dec_dis ,cuben= velopre(fluxpfs, wavelengthpfs, rapfs, decpfs,
+    #                                                                       [5459.,5498.],conti_interval=[5397.,5460.],
+    #                                                                       internum=[2, 8], mask_sig1=mask_sig1,
+    #                                                                       mask_sig2=.2,coordinate_wcs=False)
+    # heiivelomap,heiidisp,heiiimg,heiiSN ,ra_dis, dec_dis=velocitymap_filter(cubeheii,[maskcubeheii,maskcubeheii2],
+    #                                                                         wavelengthheii,ra_dis,dec_dis,z=2.340,
+    #                                                                         lamda0=1640,waveinterval=[5459.,5498.],
+    #                                                                         sigma_num=SN_sig)#.6e-19
+    #
+    # # maskcubeheii = np.ones(np.shape(cubeheii))
+    # # velocityrange = SpectralData.wavelength2velocity(wavelengthheii, 2.340, 1640) / 1e3
+    # # cubeheii_cut, maskcubeheii_cut = cubeheii[:, 10:-10, 10:-10], maskcubeheii[:, 10:-10, 10:-10]
+    # # ra_dis, dec_dis = ra_dis[10:-10], dec_dis[10:-10]
+    # # heiivelomap_cut = heiivelomap[10:-10, 10:-10] * 2.36
+    # # Specmap(cubeheii_cut, maskcubeheii_cut, heiivelomap_cut, dec_dis, ra_dis, velocityrange)
+    # heiiimg = heiiimg * 1e19
+    # fig = plt.figure(constrained_layout=False)
+    # gs = grs.GridSpec(1, 3, fig)
+    # AX = [fig.add_subplot(gs[i]) for i in range(3)]
+    # AX[-1].yaxis.set_ticks_position('right')
+    # imglist = [heiiimg,heiivelomap, heiidisp]
+    # cbarlabel=['$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$',r'$velocity(km/s)$',r'$velocity(km/s)$']
+    # ImagPlot.Gimgplot(fig, AX, imglist, dec_dis, ra_dis, heiiimg, [0.58,.9,1.3,1.8,2],'$\Delta$x(kpc)','$\Delta$y(kpc)',
+    #                   cbarlabel, ['HeII','velocity', 'dispersion'],contourmark=[True,None,None])
+    # Sourcemark(AX, sourcecoordinatelist=[[40.05268589, 220.3520946], [40.05221366, 220.3519858],
+    #                                      [40.05297755, 220.3520401], [40.05222735, 220.3493004],
+    #                                      [40.0534915, 220.3529473], [40.05224151, 220.3531833],
+    #                                      [40.04747144, 220.3524812], [40.0535024, 220.349928],
+    #                                      [40.05106072, 220.3497904]],
+    #            sourcenamelist=['', '', '', '', '',
+    #                            '', '', '', ''], referecepoint=[40.052625, 220.3519792])
+    # plt.show()
+
+    # SN_sig = 3.8
+    # mask_sig1 = SN_sig / 8.#8.
+    # cubeciv, maskcubeciv, maskcubeciv2, wavelengthciv, ra_dis, dec_dis ,cuben= velopre(fluxpfs, wavelengthpfs, rapfs,
+    #                                                                                  decpfs,
+    #                                                                                  [5160.,5200.],conti_interval=[5137,5160],
+    #                                                                                  internum=[2, 8],
+    #                                                                                  mask_sig1=mask_sig1,
+    #                                                                                  mask_sig2=.2,coordinate_wcs=False)
+    # civvelomap, civdisp,civimg,civSN,ra_dis, dec_dis=velocitymap_filter(cubeciv,[maskcubeciv,maskcubeciv2],
+    #                                                                     wavelengthciv,ra_dis,dec_dis,z=2.34385,
+    #                                                                     lamda0=1549,waveinterval=[5160.,5200.],
+    #                                                                     sigma_num=SN_sig)
+    # # maskcubeciv = np.ones(np.shape(cubeciv))
+    # # velocityrange = SpectralData.wavelength2velocity(wavelengthciv, 2.34385, 1549) / 1e3
+    # # cubeciv_cut, maskcubeciv_cut = cubeciv[:, 10:-10, 10:-10], maskcubeciv[:, 10:-10, 10:-10]
+    # # ra_dis, dec_dis = ra_dis[10:-10], dec_dis[10:-10]
+    # # civvelomap_cut = civvelomap[10:-10, 10:-10] * 2.36
+    # # Specmap(cubeciv_cut, maskcubeciv_cut, civvelomap_cut, dec_dis, ra_dis, velocityrange)
+    # civimg=civimg*1e19
+    # fig = plt.figure(constrained_layout=False)
+    # gs = grs.GridSpec(1, 3, fig, )
+    # AX = [fig.add_subplot(gs[i]) for i in range(3)]
+    # AX[-1].yaxis.set_ticks_position('right')
+    # imglist = [civimg,civvelomap, civdisp]
+    # cbarlabel=['$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$',r'$velocity(km/s)$',r'$velocity(km/s)$']
+    # ImagPlot.Gimgplot(fig, AX, imglist, dec_dis, ra_dis, civimg, [.603,.823,1.05,1.46,1.74], '$\Delta$x(kpc)', '$\Delta$y(kpc)',
+    #                   cbarlabel, ['CIV','velocity', 'dispersion'],contourmark=[True,None,None])
+    # Sourcemark(AX, sourcecoordinatelist=[[40.05268589, 220.3520946], [40.05221366, 220.3519858],
+    #                                      [40.05297755, 220.3520401], [40.05222735, 220.3493004],
+    #                                      [40.0534915, 220.3529473], [40.05224151, 220.3531833],
+    #                                      [40.04747144, 220.3524812], [40.0535024, 220.349928],
+    #                                      [40.05106072, 220.3497904]],
+    #            sourcenamelist=['', '', '', '', '',
+    #                            '', '', '', ''], referecepoint=[40.052625, 220.3519792])
+    # plt.show()
+    return None
+
+def Run_contour():
+
+
+    # ax, contour = contouroverlay(baseimgname='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/HST_WFC3_MAMMOTH.fits',
+    #                              baseext=1,
+    #                              contourimgname='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/lyman.fits', contourext=0,
+    #                              conlabel='Lyman', ylabel='DEC(J2000)', xlabel='RA(J2000)',
+    #                              contourstd=2e-18, contourlevel=[4, 8, 12, 16, 24, 32, 40, 48, 56])
+    # ax, contour = contouroverlay(baseimgname='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/HST_WFC3_MAMMOTH.fits',baseext=1,
+    #                              contourimgname='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/civ.fits', contourext=0,
+    #                              conlabel='CIV', ylabel='DEC(J2000)', xlabel='RA(J2000)',contourstd=1e-18,
+    #                              contourlevel=[2,4,6,8,10,12])
+    # ax, contour = contouroverlay(baseimgname='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/HST_WFC3_MAMMOTH.fits',baseext=1,
+    #                              contourimgname='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/heii.fits', contourext=0,
+    #                              conlabel='HeII', ylabel='DEC(J2000)', xlabel='RA(J2000)',contourstd=8e-19,
+    #                              contourlevel=[2,4,6,8,10,12])
+    # plt.show()
+    return None
+
+def Run_edit():
+
+    # Indispectral([220.3491,40.0525])
+    # Indiimg(mark='2')
 
 
     # CubeData.Editheader('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI','1441+4003_comb_ss_icubes.fits','CRVAL1',220.351083333+0.0015231999999798518-0.0002083999999911157)
@@ -556,278 +826,8 @@ def Run():
     #                waveinterval=[4037., 4047.], wavelengthcut_conti=None, name='ly3747.fits')
     # Indiimgreadout(path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',filename='1441+4003_comb_psfs_icubes.fits',waveinterval=[5424,5434],name='heii424434.fits')
     # Indiimgreadout(path='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',filename='1441+4003_comb_psfs_icubes.fits',waveinterval=[5130.,5250.],name='civ130250.fits')
-    # contouroverlay()
+    return None
 
-
-    SN_sig=6.
-    mask_sig1=SN_sig/12
-    fluxss,wavelengthss,rass,decss=Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',
-                                           '1441+4003_comb_ss_icubes.fits')
-    cube1,maskcube2,maskcube1,wavelength1,ra_dis1,dec_dis1,cuben=velopre(fluxss,wavelengthss,rass,decss,[3990,4060],
-                                                         internum=[2,8],mask_sig1=mask_sig1,mask_sig2=3.)
-
-    lymanvelomap, lymandisp, lymanimg, lymanSN, ra_dis, dec_dis = velocitymap_filter(cube1,[maskcube2,maskcube1],
-                                                                                     wavelength1,ra_dis1,dec_dis1,
-                                                                                     z=2.308,
-                                                                                     lamda0=1215.673,
-                                                                                     waveinterval=[3990., 4060],
-                                                                                     sigma_num=SN_sig)  # .18
-    maskcube2 = np.ones(np.shape(cube1))
-    velocityrange=SpectralData.wavelength2velocity(wavelength1,2.308,1215.673)/1e3
-    cube1,maskcube2=cube1[:,10:-10,10:-10],maskcube2[:,10:-10,10:-10]
-    ra_dis,dec_dis=ra_dis[10:-10],dec_dis[10:-10]
-    lymanvelomap = lymanvelomap[10:-10, 10:-10]*2.36
-    Specmap(cube1,maskcube2,lymanvelomap,dec_dis,ra_dis,velocityrange)
-    # lymanimg = lymanimg * 1e19
-    # fig = plt.figure(constrained_layout=False)
-    # gs = grs.GridSpec(1, 3, fig)
-    # AX = [fig.add_subplot(gs[i]) for i in range(3)]
-    # imglist = [lymanimg, lymanvelomap, lymandisp]
-    # cbarlabel = ['$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$', r'$velocity(km/s)$', r'$velocity(km/s)$']
-    # ImagPlot.Gimgplot(fig, AX, imglist, dec_dis, ra_dis, lymanimg, [2, 4.5, 7.7, 11.8, 17],  'DEC','RA',
-    #                   cbarlabel, ['Lyman', 'velocity', 'dispersion'], contourmark=[True, None, None])
-    #
-    # Sourcemark(AX,sourcecoordinatelist=[[40.052625,220.3519792],[40.05307381,220.3513702],
-    #             [40.05269149, 220.3497709],[40.0515933, 220.3510642],
-    #             [40.0500171, 220.3494694]],sourcenamelist=['Source-B','Source-0','Source-1',
-    #                'Source-2','Source-3'])
-    # plt.show()
-
-
-
-    # slitlist=np.array([[72,83],[101,110],[127,140]])
-    # twodspeclist=[]
-    # velolist=[]
-    # spatiallist=[]
-    # for slit in slitlist:
-    #     twodspec, velocity, spatial = SpectralData.Slitspectrum(cube1[:, :, slit[0]:slit[1]],
-    #                                                             maskcube1[:, :, slit[0]:slit[1]],ra_dis1,
-    #                                                             dec_dis1, wavelength1, 2.310, 1214.673,
-    #                                                             horizontal=False)
-    #     twodspec*=1e19
-    #     velocity/=1e3
-    #     velocity=velocity[::-1]
-    #     twodspec=np.fliplr(np.rot90(twodspec))
-    #     twodspeclist.append(twodspec)
-    #     velolist.append(velocity)
-    #     spatiallist.append(spatial)
-    # twodspeclist.insert(0,lymanvelomap)
-    # velolist.insert(0,dec_dis1)
-    # spatiallist.insert(0,ra_dis1)
-
-    # fig = plt.figure(constrained_layout=False)
-    # gs=grs.GridSpec(3,2,fig)
-    # ax0 = fig.add_subplot(gs[:, 0])
-    # AX=[fig.add_subplot(gs[i,1]) for i in range(3)]
-    # AX.append(ax0)
-    # fig,AX=plt.subplots(1,4)
-    # ImagPlot.Gimgplot(fig=fig,AX=AX,imglist=twodspeclist,x=velolist,y=spatiallist,
-    #                   xlabel=None,
-    #                   ylabel=None,
-    #                   cbarlabel=['','',
-    #                              'Intensity($10^{19} erg/s/cm^{2}/\AA$)',''],
-    #                   contourmark=[None]*4)
-    # imgname=['slit 1','slit 2','slit 3']
-    # for i in range(3):
-    #     AX[i+1].text(1600,5.8,imgname[i],fontsize=18.,color='red')
-    # AX[0].vlines(-6.,ymax=5,ymin=-10,linestyles='dashed')
-    # AX[0].vlines(-5., ymax=5, ymin=-10, linestyles='dashed')
-    # AX[0].vlines(-2., ymax=5, ymin=-10, linestyles='dashed')
-    # AX[0].vlines(-.5, ymax=5, ymin=-10, linestyles='dashed')
-    # AX[0].vlines(2., ymax=5, ymin=-10, linestyles='dashed')
-    # AX[0].vlines(4., ymax=5, ymin=-10, linestyles='dashed')
-    # AX[0].text(-6,6,'1',fontsize=15)
-    # AX[0].text(-2., 6, '2',fontsize=15)
-    # AX[0].text(2, 6, '3',fontsize=15)
-    # AX[0].text(-18, 8, 'velocity', fontsize=20)
-    # # AX[0].set_aspect(1)
-    # fig.text(0.5, 0.25, 'arcsec', ha='center', fontsize=25.)
-    # fig.text(0.05, 0.6, 'arcsec', va='center', rotation='vertical', fontsize=25.)
-    # fig.text(0.2, 0.13, 'velocity (km/s)', ha='center', fontsize=25.)
-    # plt.show()
-
-    # fluxpfs, wavelengthpfs, rapfs, decpfs = Cubepre('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI',
-    #                                                 '1441+4003_comb_psfs_icubes.fits')
-    # SN_sig = 3.8
-    # mask_sig1 = SN_sig / 25.
-    # cubeheii, maskcubeheii, maskcubeheii2, wavelengthheii, ra_dis, dec_dis ,cuben= velopre(fluxpfs, wavelengthpfs, rapfs, decpfs,
-    #                                                                       [5459.,5498.],
-    #                                                                       internum=[2, 8], mask_sig1=mask_sig1,
-    #                                                                       mask_sig2=.2)
-    # heiivelomap,heiidisp,heiiimg,heiiSN ,ra_dis, dec_dis=velocitymap_filter(cubeheii,[maskcubeheii,maskcubeheii2],
-    #                                                                         wavelengthheii,ra_dis,dec_dis,z=2.340,
-    #                                                                         lamda0=1640,waveinterval=[5459.,5498.],
-    #                                                                         sigma_num=SN_sig)#.6e-19
-
-    # maskcubeheii = np.ones(np.shape(cubeheii))
-    # velocityrange = SpectralData.wavelength2velocity(wavelengthheii, 2.340, 1640) / 1e3
-    # cubeheii_cut, maskcubeheii_cut = cubeheii[:, 10:-10, 10:-10], maskcubeheii[:, 10:-10, 10:-10]
-    # ra_dis, dec_dis = ra_dis[10:-10], dec_dis[10:-10]
-    # heiivelomap_cut = heiivelomap[10:-10, 10:-10] * 2.36
-    # Specmap(cubeheii_cut, maskcubeheii_cut, heiivelomap_cut, dec_dis, ra_dis, velocityrange)
-    # heiiimg = heiiimg * 1e19
-    # fig = plt.figure(constrained_layout=False)
-    # gs = grs.GridSpec(1, 3, fig)
-    # AX = [fig.add_subplot(gs[i]) for i in range(3)]
-    # AX[-1].yaxis.set_ticks_position('right')
-    # imglist = [heiiimg,heiivelomap, heiidisp]
-    # cbarlabel=['$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$',r'$velocity(km/s)$',r'$velocity(km/s)$']
-    # ImagPlot.Gimgplot(fig, AX, imglist, dec_dis, ra_dis, heiiimg, [0.58,.9,1.3,1.8,2], 'arcsec', 'arcsec',
-    #                   cbarlabel, ['HeII','velocity', 'dispersion'],contourmark=[True,None,None])
-    # Sourcemark(AX, sourcecoordinatelist=[[40.052625, 220.3519792], [40.05307381, 220.3513702],
-    #                                      [40.05269149, 220.3497709],[40.0515933, 220.3510642],
-    #                                      [40.0500171, 220.3494694]],
-    #            sourcenamelist=['Source-B','Source-0','Source-1',
-    #                            'Source-2','Source-3'])
-    # plt.show()
-
-    # SN_sig = 3.8
-    # mask_sig1 = SN_sig / 8.
-    # cubeciv, maskcubeciv, maskcubeciv2, wavelengthciv, ra_dis, dec_dis ,cuben= velopre(fluxpfs, wavelengthpfs, rapfs,
-    #                                                                                  decpfs,
-    #                                                                                  [5160.,5200.],
-    #                                                                                  internum=[2, 8],
-    #                                                                                  mask_sig1=mask_sig1,
-    #                                                                                  mask_sig2=.2)
-    # civvelomap, civdisp,civimg,civSN,ra_dis, dec_dis=velocitymap_filter(cubeciv,[maskcubeciv,maskcubeciv2],
-    #                                                                     wavelengthciv,ra_dis,dec_dis,z=2.34385,
-    #                                                                     lamda0=1549,waveinterval=[5160.,5200.],
-    #                                                                     sigma_num=SN_sig)
-    # maskcubeciv = np.ones(np.shape(cubeciv))
-    # velocityrange = SpectralData.wavelength2velocity(wavelengthciv, 2.34385, 1549) / 1e3
-    # cubeciv_cut, maskcubeciv_cut = cubeciv[:, 10:-10, 10:-10], maskcubeciv[:, 10:-10, 10:-10]
-    # ra_dis, dec_dis = ra_dis[10:-10], dec_dis[10:-10]
-    # civvelomap_cut = civvelomap[10:-10, 10:-10] * 2.36
-    # Specmap(cubeciv_cut, maskcubeciv_cut, civvelomap_cut, dec_dis, ra_dis, velocityrange)
-    # civimg=civimg*1e19
-    # fig = plt.figure(constrained_layout=False)
-    # gs = grs.GridSpec(1, 3, fig, )
-    # AX = [fig.add_subplot(gs[i]) for i in range(3)]
-    # AX[-1].yaxis.set_ticks_position('right')
-    # imglist = [civimg,civvelomap, civdisp]
-    # cbarlabel=['$intensity(10^{-19} \ erg/s/cm^{2}/\AA)$',r'$velocity(km/s)$',r'$velocity(km/s)$']
-    # ImagPlot.Gimgplot(fig, AX, imglist, dec_dis, ra_dis, civimg, [.603,.823,1.05,1.46,1.74], 'arcsec', 'arcsec',
-    #                   cbarlabel, ['CIV','velocity', 'dispersion'],contourmark=[True,None,None])
-    # Sourcemark(AX, sourcecoordinatelist=[[40.052625, 220.3519792], [40.05307381, 220.3513702],
-    #                                      [40.05269149, 220.3497709], [40.0515933, 220.3510642],
-    #                                      [40.0500171, 220.3494694]],
-    #            sourcenamelist=['Source-B', 'Source-0', 'Source-1',
-    #                            'Source-2', 'Source-3'])
-    # plt.show()
-
-
-
-    # fig=plt.figure(constrained_layout=True)
-    # gs=grs.GridSpec(2,4,fig,wspace=0,hspace=0)
-    # ax0=fig.add_subplot(gs[:,:2])
-    # AX=[fig.add_subplot(gs[i,j]) for j in range(2,4,1) for i in range(2)]
-    # AX[-1].yaxis.set_ticks_position('right')
-    # for i in range(len(AX)-1):
-    #     AX[i].get_shared_x_axes().join(AX[i], AX[-1])
-    #     AX[i].get_shared_y_axes().join(AX[i], AX[-1])
-    #     AX[i].set_xticklabels([])
-    #     AX[i].set_yticklabels([])
-    #
-    # AX.append(ax0)
-    # fig.text(0.5, 0.06, 'arcsec', ha='center', fontsize=25.)
-    # fig.text(0.08, 0.5, 'arcsec', va='center', rotation='vertical', fontsize=25.)
-    #
-    #
-    # wavelist=[(4007+i*10,4007+(i+1)*10) for i in range(4)]
-    # wavelist.append((3700,4300))
-    # for i in range(len(wavelist)):
-    #     img,ra,dec=OptimalExtractimg('/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI', '1441+4003_comb_ss_icubes.fits',
-    #                       waveinterval=[wavelist[i][0],wavelist[i][1]],internum=[2,8],mask_sig1=0.)
-    #     img = ImagPlot.ImgCut(img, [0.1, 0.1, 0.1, 0.1])
-    #     img=AX[i].pcolor(dec,ra,img,cmap='gist_ncar')
-    #     AX[i].text(-15, 7, str(wavelist[i][0])+'$\AA$-'+str(wavelist[i][1])+'$\AA$',fontsize=17.)
-    #
-    #
-    #     if i==1:
-    #         AX[i].scatter(1.8, -1.5, marker='*', color='midnightblue', s=100., label='source-B')
-    #         AX[i].scatter(3.3, -2.9, marker='*', color='gray', s=100., label='source-0')
-    #         AX[i].scatter(2.1, -9, marker='*', color='magenta', s=100., label='source-1')
-    #         AX[i].scatter(-2.0, -4.3, marker='*', color='darkolivegreen', s=100., label='source-2')
-    #         AX[i].scatter(-7.5, -9.9, marker='*', color='ghostwhite', s=100., label='source-3')
-    #     else:
-    #         AX[i].scatter(1.8, -1.5, marker='*', color='midnightblue', s=100.)
-    #         AX[i].scatter(3.3, -2.9, marker='*', color='gray', s=100.)
-    #         AX[i].scatter(2.1, -9, marker='*', color='magenta', s=100.)
-    #         AX[i].scatter(-2.0, -4.3, marker='*', color='darkolivegreen', s=100.)
-    #         AX[i].scatter(-7.5, -9.9, marker='*', color='ghostwhite', s=100.)
-    #     AX[i].tick_params(labelsize=15.)
-    #
-    # AX[-1].text(3.1, -1.8, 'source-B', fontsize=17.)
-    # AX[-1].text(4.9, -3.2, 'source-0', fontsize=17.)
-    # AX[-1].text(3.7, -9.3, 'source-1', fontsize=17.)
-    # AX[-1].text(-.4, -5., 'source-2', fontsize=17.)
-    # AX[-1].text(-5.9, -10.9, 'source-3', fontsize=17.)
-    # fig.subplots_adjust(right=0.8)
-    # cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7],aspect=20)
-    # cbar=fig.colorbar(img, cax=cbar_ax)
-    # cbar.set_label('flux $(10^{-19} \ erg/s/cm^{2}/\AA)$', fontsize=25.)
-    # cbar.ax.tick_params(labelsize=15.)
-    #
-    # plt.show()
-
-
-    # fig,AX=plt.subplots(2,3,sharey=True)
-    # AX=AX.flatten()
-    # fig.text(0.08, 0.5, 'Normalized', va='center', rotation='vertical', fontsize=20.)
-    # fig.text(0.5, 0.05, 'velocity km/s', ha='center', fontsize=20.)
-    # fig.suptitle('Lyman', fontsize=20.)
-    # SpectralData.Specplotfit(filename='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/1441+4003_comb_ss_icubes.fits',
-    #                          wavecut=[3990,4060],fitmodel='gaussian',guesses=[0.8,-120,400,0.8,0,400],rewave=1215.673*3.3125,position=[14, 42, 3],
-    #                          axis=AX[0],ylabel='Normalized',annotate='mammoth-1')
-    # SpectralData.Specplotfit(filename='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/1441+4003_comb_ss_icubes.fits',
-    #                          wavecut=[3990, 4060], fitmodel='gaussian', guesses=[0.64, -510, 190, 0.47, 300, 150],
-    #                          rewave=1215.673 * 3.3118, position=[15, 37, 3.5],
-    #                          axis=AX[1], ylabel='Normalized', annotate='source-0')
-    # SpectralData.Specplotfit(filename='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/1441+4003_comb_ss_icubes.fits',
-    #                          wavecut=[3990, 4060], fitmodel='gaussian', guesses=[1,-530,270],
-    #                          rewave=1215.673 * 3.3118, position=[11, 34, 4],
-    #                          axis=AX[2], ylabel='Normalized', annotate='source-1')
-    # SpectralData.Specplotfit(filename='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/1441+4003_comb_ss_icubes.fits',
-    #                          wavecut=[3990, 4060], fitmodel='gaussian', guesses=[0.81, -800,240,0.55,-41,100],
-    #                          rewave=1215.673 * 3.3118, position=[14, 22, 4],
-    #                          axis=AX[3], ylabel='Normalized', annotate='source-2')
-    # SpectralData.Specplotfit(filename='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/1441+4003_comb_ss_icubes.fits',
-    #                          wavecut=[3990, 4060], fitmodel='gaussian', guesses=[1,-800,270],
-    #                          rewave=1215.673 * 3.3118, position=[7, 19, 6],
-    #                          axis=AX[4], ylabel='Normalized', annotate='source-3')
-    # fig.subplots_adjust(wspace=0, hspace=0)
-    # plt.show()
-
-    # fig, AX = plt.subplots(1, 2, sharex=True, sharey=True)
-    # AX = AX.flatten()
-    # fig.text(0.08, 0.5, 'Normalized', va='center', rotation='vertical', fontsize=20.)
-    # fig.text(0.5, 0.05, 'velocity km/s', ha='center', fontsize=20.)
-    # fig.suptitle('HeII', fontsize=20.)
-    # SpectralData.Specplotfit(filename='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/1441+4003_comb_psfs_icubes.fits',
-    #                          wavecut=[5420,5550], fitmodel='gaussian', guesses=[0.8, -120, 400, 0.8, 0, 400],
-    #                          rewave=1640 * 3.3405, position=[14, 42, 3.5],
-    #                          axis=AX[0], ylabel='Normalized', annotate='mammoth-1')
-    # SpectralData.Specplotfit(filename='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/1441+4003_comb_psfs_icubes.fits',
-    #                          wavecut=[5420,5550], fitmodel='gaussian', guesses=[0.64, -510, 190, 0.47, 300, 150],
-    #                          rewave=1640 * 3.339, position=[15, 37, 4.],
-    #                          axis=AX[1], ylabel='Normalized', annotate='source-0')
-    # fig.subplots_adjust(wspace=0, hspace=0)
-    # plt.show()
-
-    # fig, AX = plt.subplots(1, 2, sharex=True, sharey=True)
-    # AX = AX.flatten()
-    # fig.text(0.08, 0.5, 'Normalized', va='center', rotation='vertical', fontsize=20.)
-    # fig.text(0.5, 0.05, 'velocity km/s', ha='center', fontsize=20.)
-    # fig.suptitle('CIV', fontsize=20.)
-    # SpectralData.Specplotfit(filename='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/1441+4003_comb_psfs_icubes.fits',
-    #                          wavecut=[5130.,5250.], fitmodel='gaussian', guesses=[0.8, -120, 400, 0.8, 0, 400],
-    #                          rewave=1549 * 3.3452, position=[14, 42, 3.5],
-    #                          axis=AX[0], ylabel='Normalized', annotate='mammoth-1')
-    # SpectralData.Specplotfit(filename='/Users/shiwuzhang/W&S/ASTRO/MAMMOTH_KCWI/1441+4003_comb_psfs_icubes.fits',
-    #                          wavecut=[5130.,5250.], fitmodel='gaussian', guesses=[0.64, -510, 190, 0.47, 300, 150],
-    #                          rewave=1549 * 3.34301, position=[15, 37, 4.],
-    #                          axis=AX[1], ylabel='Normalized', annotate='source-0')
-    # fig.subplots_adjust(wspace=0, hspace=0)
-    # plt.show()
-
-Run()
+# Run_rawimg()
+# Run_spectrum()
+Run_velo()
